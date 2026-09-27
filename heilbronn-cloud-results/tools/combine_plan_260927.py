@@ -15,7 +15,8 @@ Usage
   --summarize     path of summarize.py (default /home/user/heil/summarize.py); pass '' to skip it.
                   The VM drivers run in the folder that holds it (default /home/user/heil).
   --candidates    JSON list of triangles, or the path of a file holding one, in the order they should be
-                  used for new splits (default: DEFAULT_CANDIDATES below, then all triangles among 4..n-1).
+                  used for new splits (default: DEFAULT_CANDIDATES below, then all triangles among 4..n-1,
+                  then every other triangle in lexicographic order).
   --split-size    triangles per proposed split (default 4, i.e. 16 parts per region).
   --hours         solver time limit per part in the proposed runs (default 5.5; more than 0; GitHub jobs
                   only allow up to 5.5, so a larger value leaves only the VM route).
@@ -502,6 +503,9 @@ class Tree:
 def load_candidates(arg, n):
     if arg is None:
         cands = [t for t in DEFAULT_CANDIDATES if max(t) < n] + [list(t) for t in itertools.combinations(range(4, n), 3)]
+        # then every other triangle (for example (0,k,l) with free points k,l), so a region can always be split
+        # until all orientations are fixed; forced (T+/T-) and already fixed ones are skipped in propose_split
+        cands += [list(t) for t in itertools.combinations(range(n), 3) if list(t) not in cands]
     else:
         text = open(arg).read() if os.path.isfile(arg) else arg
         cands = json.loads(text)
