@@ -715,8 +715,14 @@ def run_summarize(path, outdir):
 
 
 def find_result_files(root):
-    """Every result_*.json under root, hidden folders included (summarize.py's glob skips those)."""
-    return sorted(glob.glob(os.path.join(glob.escape(root), '**', 'result_*.json'), recursive=True, include_hidden=True))
+    """Every result_*.json under root, hidden folders included (summarize.py's glob skips those).
+    Also this tool's own side copies BETTER_result_*.json and UNPARSED_result_*.json, so that re-reading an earlier
+    OUTDIR still reports the BETTER suspects and unreadable files it set aside (summarize.py deliberately skips them)."""
+    base = glob.escape(root)
+    found = set()
+    for pat in ('result_*.json', 'BETTER_result_*.json', 'UNPARSED_result_*.json'):
+        found.update(glob.glob(os.path.join(base, '**', pat), recursive=True, include_hidden=True))
+    return sorted(found)
 
 
 def run(argv=None):
