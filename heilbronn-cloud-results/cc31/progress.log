@@ -1,1 +1,5 @@
 21:04:22 UTC start: 14 seed region(s) under [[[2,3,4],1],[[2,3,5],1],[[2,3,6],1],[[2,3,7],1],[[2,3,8],1]]
+21:05:28 UTC region PROVED by a 300 s run (66 s); open 13
+21:09:38 UTC split region (bound/target 1.167) on [[0,3,6],[0,3,7],[1,2,6],[1,2,7]]: 14 pieces proved, 2 open; total runs 17, proved 15, open regions 14
+21:13:12 UTC split region (bound/target 1.178) on [[0,3,8],[1,2,8],[0,2,4],[0,2,5]]: 13 pieces proved, 3 open; total runs 33, proved 28, open regions 16
+21:14:15 UTC region PROVED by a 300 s run (62 s); open 15
