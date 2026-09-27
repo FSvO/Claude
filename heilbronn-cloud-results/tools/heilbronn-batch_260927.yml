@@ -1,0 +1,348 @@
+# Heilbronn problem in the unit right triangle: refine MANY unresolved regions in ONE manual run.
+# Companion of heilbronn.yml (same heil_tri.py model, same result files, same 'results' branch).
+# Install: add this file to the repository as .github/workflows/heilbronn-batch.yml
+# Start:   GitHub "Actions" tab -> "heilbronn-batch" -> "Run workflow".
+# Each entry of "nodes" is one region (its "prefix", as printed by summarize.py) plus the triangles to split it on;
+# every part 0..2^len(split)-1 (or only the listed "parts") becomes one job of the boundary case.
+# Results: branch 'results', folder results/batch-<run number>-n<n>/ (never run-<k>-..., which heilbronn.yml uses).
+name: heilbronn-batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      n:
+        description: "Number of points"
+        default: "9"
+      target:
+        description: "Prove that every job has upper bound <= target. n=9: 0.027426211734693878"
+        default: "0.027426211734693878"
+      nodes:
+        description: 'JSON list of regions, e.g. [{"prefix":[[[2,3,4],1],[[2,3,5],0]],"split":[[0,3,4],[0,3,5]]}]. Optional "parts":[0,3] runs only those parts.'
+        default: "[]"
+      hours:
+        description: "Solver time limit per job in hours (at most 5.5; GitHub-hosted jobs stop at 6 h)"
+        default: "1"
+      solver:
+        description: "gurobi or scip"
+        default: "gurobi"
+      runner:
+        description: "Runner label (ubuntu-latest, or a larger-runner label if your organisation has one)"
+        default: "ubuntu-latest"
+
+permissions:
+  contents: write   # lets the summary job save results to the 'results' branch
+
+jobs:
+  # 1) Check every input and turn "nodes" into the list of jobs. Inputs reach Python only through
+  #    environment variables, never pasted into code, so a stray quote or $(...) cannot run anything.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      n: ${{ steps.plan.outputs.n }}
+      target: ${{ steps.plan.outputs.target }}
+      solver: ${{ steps.plan.outputs.solver }}
+      runner: ${{ steps.plan.outputs.runner }}
+      secs: ${{ steps.plan.outputs.secs }}
+      timeout: ${{ steps.plan.outputs.timeout }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check inputs and list the jobs
+        id: plan
+        shell: python
+        env:
+          IN_N: ${{ inputs.n }}
+          IN_TARGET: ${{ inputs.target }}
+          IN_NODES: ${{ inputs.nodes }}
+          IN_HOURS: ${{ inputs.hours }}
+          IN_SOLVER: ${{ inputs.solver }}
+          IN_RUNNER: ${{ inputs.runner }}
+        run: |
+          import hashlib, json, math, os, re, secrets, sys
+
+          MAX_JOBS = 256   # GitHub's limit for one job matrix
+          MAX_SPLIT = 6    # at most 2^6 = 64 parts per region
+
+          def fail(msg):
+              # One line, escaped as GitHub requires, so user text cannot fake a workflow command.
+              msg = msg.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error title=Invalid input::{msg}')
+              sys.exit(1)
+
+          def show(value, limit=150):
+              # Quote user text for error messages (json.dumps keeps it on one line).
+              s = json.dumps(value)
+              return s if len(s) <= limit else s[:limit] + '...'
+
+          def env(name):
+              return os.environ.get(name, '').strip()
+
+          def number(name, label):
+              s = env(name)
+              try:
+                  v = float(s)
+              except ValueError:
+                  fail(f'{label} must be a number, got {show(s)}')
+              if not math.isfinite(v):
+                  fail(f'{label} must be a finite number, got {show(s)}')
+              return v
+
+          # ---- simple inputs
+          s = env('IN_N')
+          if not re.fullmatch(r'[0-9]{1,3}', s):
+              fail(f'n must be a whole number, got {show(s)}')
+          n = int(s)
+          if not 4 <= n <= 12:
+              fail(f'n must be between 4 and 12, got {n}')
+          target = number('IN_TARGET', 'target')
+          if not 0 < target < 0.5:
+              fail(f'target must be between 0 and 0.5, got {target!r}')
+          hours = number('IN_HOURS', 'hours')
+          if not 0 < hours <= 5.5:
+              fail(f'hours must be more than 0 and at most 5.5, got {hours!r}')
+          solver = env('IN_SOLVER')
+          if solver not in ('gurobi', 'scip'):
+              fail(f'solver must be gurobi or scip, got {show(solver)}')
+          runner = env('IN_RUNNER')
+          if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', runner):
+              fail(f'runner must be a runner label such as ubuntu-latest, got {show(runner)}')
+
+          # ---- nodes
+          def no_duplicate_keys(pairs):
+              keys = [k for k, _ in pairs]
+              if len(set(keys)) != len(keys):
+                  fail(f'nodes: a JSON object repeats a key: {show(keys)}')
+              return dict(pairs)
+
+          try:
+              nodes = json.loads(env('IN_NODES'), object_pairs_hook=no_duplicate_keys)
+          except (ValueError, RecursionError) as e:
+              fail(f'nodes is not valid JSON ({type(e).__name__}: {e})')
+          if not isinstance(nodes, list) or not nodes:
+              fail('nodes must be a non-empty JSON list of {"prefix": [...], "split": [...]} objects')
+
+          def triangle(v, where):
+              # [i, j, k] with 0 <= i < j < k < n; heil_tri.py silently ignores unsorted triples.
+              if not (isinstance(v, list) and len(v) == 3 and all(type(a) is int for a in v)):
+                  fail(f'{where}: a triangle must be a list of 3 whole numbers, got {show(v)}')
+              i, j, k = v
+              if not 0 <= i < j < k < n:
+                  fail(f'{where}: triangle {show(v)} must be sorted, without repeats, using points 0..{n - 1}')
+              # Set T+ of heil_tri.py (boundary case): always positive, so fixing or splitting it does nothing.
+              if k <= 3 or (i, j) == (0, 1):
+                  fail(f'{where}: triangle {show(v)} is always positive in the boundary case (set T+); do not fix or split it')
+              return (i, j, k)
+
+          jobs, seen = [], {}
+          for num, node in enumerate(nodes, 1):
+              where = f'node {num}'
+              if not isinstance(node, dict):
+                  fail(f'{where}: must be an object like {{"prefix": [...], "split": [...]}}, got {show(node)}')
+              unknown = sorted(set(node) - {'prefix', 'split', 'parts'})
+              if unknown:
+                  fail(f'{where}: unknown key(s) {show(unknown)}; allowed keys are prefix, split, parts')
+              if 'prefix' not in node or 'split' not in node:
+                  fail(f'{where}: needs both "prefix" (use [] for none) and "split"')
+
+              # prefix: list of [[i,j,k], sign], sign 1 = positive orientation, 0 = negative. Order is kept.
+              if not isinstance(node['prefix'], list):
+                  fail(f'{where}: prefix must be a list, got {show(node["prefix"])}')
+              prefix = []
+              for entry in node['prefix']:
+                  if not (isinstance(entry, list) and len(entry) == 2):
+                      fail(f'{where}: each prefix entry must look like [[i,j,k], 0 or 1], got {show(entry)}')
+                  t = triangle(entry[0], f'{where} prefix')
+                  sign = entry[1]
+                  if type(sign) is not int or sign not in (0, 1):
+                      fail(f'{where}: prefix sign must be 0 or 1, got {show(sign)}')
+                  prefix.append((t, sign))
+              fixed = {t for t, _ in prefix}
+              if len(fixed) != len(prefix):
+                  fail(f'{where}: the prefix fixes the same triangle more than once')
+
+              # split: 1..6 distinct triangles that the prefix does not already fix.
+              if not isinstance(node['split'], list) or not 1 <= len(node['split']) <= MAX_SPLIT:
+                  fail(f'{where}: split must be a list of 1 to {MAX_SPLIT} triangles, got {show(node["split"])}')
+              split = [triangle(t, f'{where} split') for t in node['split']]
+              if len(set(split)) != len(split):
+                  fail(f'{where}: split lists the same triangle more than once')
+              clash = [list(t) for t in split if t in fixed]
+              if clash:
+                  fail(f'{where}: split triangle(s) {show(clash)} are already fixed by the prefix')
+
+              # parts: all of 0..2^len(split)-1 unless a subset is given.
+              count = 2 ** len(split)
+              if 'parts' in node:
+                  parts = node['parts']
+                  if not (isinstance(parts, list) and parts
+                          and all(type(p) is int and 0 <= p < count for p in parts)):
+                      fail(f'{where}: parts must be a non-empty list of numbers 0..{count - 1}, got {show(parts)}')
+                  if len(set(parts)) != len(parts):
+                      fail(f'{where}: parts lists the same part more than once')
+                  parts = sorted(parts)
+              else:
+                  parts = list(range(count))
+
+              # Canonical compact strings, exactly what heil_tri.py will record. The prefix keeps the
+              # user's order (summarize.py compares prefixes as sorted lists, so order does not matter there).
+              compact = lambda v: json.dumps(v, separators=(',', ':'))
+              prefix_str = compact([[list(t), sg] for t, sg in prefix])
+              split_str = compact([list(t) for t in split])
+              # Stable id: the same region (prefix in any order) with the same split gets the same id.
+              key = compact([sorted([list(t), sg] for t, sg in prefix), [list(t) for t in split]])
+              node_id = hashlib.sha256(key.encode()).hexdigest()[:10]
+              if node_id in seen:
+                  other, other_key = seen[node_id]
+                  if other_key == key:
+                      fail(f'{where} is the same region and split as node {other}; remove one of them')
+                  fail(f'{where} and node {other} got the same id {node_id}; change the order of one split')
+              seen[node_id] = (num, key)
+              for p in parts:
+                  jobs.append({'id': node_id, 'prefix': prefix_str, 'split': split_str, 'part': p})
+              if len(jobs) > MAX_JOBS:
+                  fail(f'too many jobs: more than {MAX_JOBS} in total (GitHub limit); split the batch into several runs')
+
+          secs = max(1, int(hours * 3600))                  # solver time limit per job
+          timeout = min(358, math.ceil(hours * 60) + 25)    # job limit: solver time + 25 min for setup
+
+          outputs = {'matrix': json.dumps(jobs, separators=(',', ':')), 'n': str(n), 'target': repr(target),
+                     'solver': solver, 'runner': runner, 'secs': str(secs), 'timeout': str(timeout),
+                     'jobs': str(len(jobs))}
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+              for name, value in outputs.items():
+                  delim = 'EOF_' + secrets.token_hex(16)   # random heredoc delimiter, cannot occur in value
+                  assert delim not in value
+                  f.write(f'{name}<<{delim}\n{value}\n{delim}\n')
+
+          lines = [f'### Batch plan: n = {n}, target = {target!r}, {len(jobs)} jobs, {hours!r} h each',
+                   '', '| node | id | fixed triangles in prefix | split | parts |', '|---|---|---|---|---|']
+          for node_id, (num, _) in seen.items():
+              mine = [j for j in jobs if j['id'] == node_id]
+              lines.append(f"| {num} | {node_id} | {len(json.loads(mine[0]['prefix']))} | "
+                           f"{mine[0]['split']} | {[j['part'] for j in mine]} |")
+          print('\n'.join(lines))
+          if os.environ.get('GITHUB_STEP_SUMMARY'):
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+                  f.write('\n'.join(lines) + '\n')
+
+  # 2) One job per (region, part). Values reach the shell only as environment variables.
+  solve:
+    needs: plan
+    name: solve ${{ matrix.id }} part ${{ matrix.part }}
+    runs-on: ${{ needs.plan.outputs.runner }}
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install solver
+        env:
+          SOLVER: ${{ needs.plan.outputs.solver }}
+        run: |
+          python -m pip install --upgrade pip
+          if [ "$SOLVER" = "gurobi" ]; then pip install "gurobipy>=13,<14"; else pip install pyscipopt; fi
+      - name: Solve region ${{ matrix.id }} part ${{ matrix.part }}
+        env:
+          N: ${{ needs.plan.outputs.n }}
+          TARGET: ${{ needs.plan.outputs.target }}
+          SOLVER: ${{ needs.plan.outputs.solver }}
+          SECS: ${{ needs.plan.outputs.secs }}
+          ID: ${{ matrix.id }}
+          PART: ${{ matrix.part }}
+          PREFIX: ${{ matrix.prefix }}
+          SPLIT: ${{ matrix.split }}
+        run: |
+          set -o pipefail   # a solver crash fails this step even though tee succeeds
+          python heil_tri.py --n "$N" --case boundary --cutoff "$TARGET" \
+            --split "$SPLIT" --part "$PART" --prefix "$PREFIX" \
+            --solver "$SOLVER" --threads "$(nproc)" --timelimit "$SECS" \
+            --out "result_boundary_${ID}_${PART}.json" 2>&1 | tee "solver_${ID}_${PART}.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-${{ matrix.id }}-${{ matrix.part }}
+          path: |
+            result_boundary_${{ matrix.id }}_${{ matrix.part }}.json
+            solver_${{ matrix.id }}_${{ matrix.part }}.log
+
+  # 3) Collect all results, summarise them, and save them to the 'results' branch.
+  summary:
+    needs: [plan, solve]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: results
+          pattern: result-*
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Summarise
+        run: |
+          mkdir -p results   # nothing is downloaded if no job produced a file
+          # A batch alone is normally "Not (yet) a complete certificate": that is expected, not an error.
+          if ! python summarize.py results --md summary.md; then
+            echo "::warning::summarize.py failed on these results (see above); the raw files are still saved."
+            echo "summarize.py failed on this batch; see the job log." > summary.md
+          fi
+          # summarize.py writes no file when there are no results
+          [ -f summary.md ] || echo "No result files found in this batch." > summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summary
+          path: |
+            summary.md
+            results
+      - name: Save results to the 'results' branch (readable by a Claude cloud session with git)
+        env:
+          RUN: ${{ github.run_number }}
+          N: ${{ needs.plan.outputs.n }}
+        run: |
+          D="results/batch-${RUN}-n${N}"
+          mkdir -p "/tmp/save/$D"
+          cp -r results/. "/tmp/save/$D/"
+          cp summary.md "/tmp/save/$D/"
+          rm -rf results summary.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          saved=no
+          for attempt in 1 2 3 4 5; do
+            # Start each attempt from the newest 'results' branch and copy the files in again (no rebase).
+            git fetch origin results || true
+            if git rev-parse --verify -q origin/results >/dev/null; then
+              git checkout -q -f -B results origin/results
+            elif git rev-parse --verify -q refs/heads/results >/dev/null; then
+              git checkout -q -f results        # our own first commit from an earlier attempt
+            else
+              git checkout -q -f --orphan results
+              git rm -rf -q . || true
+            fi
+            mkdir -p results
+            cp -r /tmp/save/results/. results/
+            git add -f results
+            if git diff --cached --quiet; then
+              echo "Nothing new to commit."
+            else
+              git commit -q -m "Batch results of run ${RUN} (n=${N})"
+            fi
+            if git push origin results; then saved=yes; break; fi
+            echo "Push attempt $attempt failed; trying again."
+            sleep $((attempt * 10))
+          done
+          if [ "$saved" != yes ]; then
+            echo "::error::Could not save to the 'results' branch after 5 attempts. The files are in this run's 'summary' artifact."
+            exit 1
+          fi
