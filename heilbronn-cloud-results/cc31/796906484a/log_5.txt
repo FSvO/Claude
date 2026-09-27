@@ -23,7 +23,7 @@ NonConvex  2
 Threads  4
 
 Optimize a model with 137 rows, 107 columns and 774 nonzeros (Max)
-Model fingerprint: 0xa5ec4001
+Model fingerprint: 0x79cd297f
 Model has 1 linear objective coefficients
 Model has 50 quadratic constraints
 Variable types: 65 continuous, 42 integer (42 binary)
@@ -47,39 +47,38 @@ Root relaxation presolve removed 50 rows and 1 columns
 Root relaxation presolved: 287 rows, 107 columns, 1124 nonzeros
 
 
-Root relaxation: objective 8.333333e-02, 116 iterations, 0.00 seconds (0.00 work units)
+Root relaxation: objective 8.333333e-02, 115 iterations, 0.00 seconds (0.00 work units)
 
     Nodes    |    Current Node    |     Objective Bounds      |     Work
  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
-     0     0    0.08333    0   56   -0.00000    0.08333      -     -    0s
-     0     0    0.07143    0   61   -0.00000    0.07143      -     -    0s
-     0     0    0.05882    0   59   -0.00000    0.05882      -     -    0s
-     0     0    0.05882    0   55   -0.00000    0.05882      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     2    0.05000    0   50   -0.00000    0.05000      -     -    0s
-*  610   522              76       0.0000001    0.04858      -  16.8    0s
-H  916   741                       0.0000003    0.04858      -  17.5    0s
-* 1925  1255             119       0.0000003    0.03378      -  18.7    1s
-* 1995  1233             119       0.0000003    0.03378      -  18.8    1s
-* 3601  1996              78       0.0000004    0.02760      -  20.7    2s
-* 3621  1996              83       0.0000004    0.02760      -  20.6    2s
+     0     0    0.08333    0   50   -0.00000    0.08333      -     -    0s
+H    0     0                       0.0000000    0.08333      -     -    0s
+     0     0    0.05000    0   65    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   60    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   47    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   48    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   53    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   44    0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   45    0.00000    0.05000      -     -    0s
+H    0     0                       0.0000000    0.05000      -     -    0s
+     0     0    0.05000    0   45    0.00000    0.05000      -     -    0s
+     0     2    0.05000    0   45    0.00000    0.05000      -     -    0s
+H   95   126                       0.0000004    0.05000      -  22.1    0s
+H 2509  1662                       0.0000004    0.03064      -  22.6    1s
 
 Cutting planes:
-  Gomory: 2
-  Implied bound: 6
-  MIR: 3
-  Flow cover: 8
-  RLT: 48
-  BQP: 8
+  Gomory: 6
+  Flow cover: 5
+  RLT: 42
+  Relax-and-lift: 1
+  BQP: 11
 
-Explored 4261 nodes (86106 simplex iterations) in 2.30 seconds (2.19 work units)
+Explored 5060 nodes (110340 simplex iterations) in 2.25 seconds (2.34 work units)
 Thread count was 4 (of 4 available processors)
 
-Solution count 7: 4.09067e-07 3.65496e-07 3.01041e-07 ... -0
+Solution count 5: 4.18497e-07 4.03174e-07 4.4048e-08 ... -0
 
 Optimization achieved user objective limit
-Best objective 4.090671358916e-07, best bound 2.650450315247e-02, gap -
-{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 2.299187183380127, "objval": 4.0906713589157945e-07, "objbound": 0.026504503152467922, "binaries": 42}
+Best objective 4.184973412819e-07, best bound 2.708869356629e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 2.2478671073913574, "objval": 4.184973412819222e-07, "objbound": 0.027088693566287757, "binaries": 42}

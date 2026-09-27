@@ -23,7 +23,7 @@ NonConvex  2
 Threads  4
 
 Optimize a model with 137 rows, 107 columns and 774 nonzeros (Max)
-Model fingerprint: 0xa5ec4001
+Model fingerprint: 0x43da4452
 Model has 1 linear objective coefficients
 Model has 50 quadratic constraints
 Variable types: 65 continuous, 42 integer (42 binary)
@@ -47,39 +47,40 @@ Root relaxation presolve removed 50 rows and 1 columns
 Root relaxation presolved: 287 rows, 107 columns, 1124 nonzeros
 
 
-Root relaxation: objective 8.333333e-02, 116 iterations, 0.00 seconds (0.00 work units)
+Root relaxation: objective 8.333333e-02, 134 iterations, 0.00 seconds (0.00 work units)
 
     Nodes    |    Current Node    |     Objective Bounds      |     Work
  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
-     0     0    0.08333    0   56   -0.00000    0.08333      -     -    0s
-     0     0    0.07143    0   61   -0.00000    0.07143      -     -    0s
-     0     0    0.05882    0   59   -0.00000    0.05882      -     -    0s
-     0     0    0.05882    0   55   -0.00000    0.05882      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     0    0.05000    0   50   -0.00000    0.05000      -     -    0s
-     0     2    0.05000    0   50   -0.00000    0.05000      -     -    0s
-*  610   522              76       0.0000001    0.04858      -  16.8    0s
-H  916   741                       0.0000003    0.04858      -  17.5    0s
-* 1925  1255             119       0.0000003    0.03378      -  18.7    1s
-* 1995  1233             119       0.0000003    0.03378      -  18.8    1s
-* 3601  1996              78       0.0000004    0.02760      -  20.7    2s
-* 3621  1996              83       0.0000004    0.02760      -  20.6    2s
+     0     0    0.08333    0   52   -0.00000    0.08333      -     -    0s
+     0     0    0.07143    0   50   -0.00000    0.07143      -     -    0s
+     0     0    0.07143    0   57   -0.00000    0.07143      -     -    0s
+     0     0    0.06618    0   64   -0.00000    0.06618      -     -    0s
+     0     0    0.06618    0   59   -0.00000    0.06618      -     -    0s
+     0     0    0.06250    0   66   -0.00000    0.06250      -     -    0s
+     0     0    0.05000    0   51   -0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   49   -0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   49   -0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   49   -0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   49   -0.00000    0.05000      -     -    0s
+     0     0    0.05000    0   49   -0.00000    0.05000      -     -    0s
+     0     2    0.05000    0   49   -0.00000    0.05000      -     -    0s
+H  596   535                       0.0000000    0.05000      -  17.7    0s
+*  689   623             104       0.0000001    0.05000      -  16.9    0s
+H  726   655                       0.0000003    0.05000      -  16.5    0s
+H 1140   916                       0.0000005    0.04860      -  17.2    0s
 
 Cutting planes:
-  Gomory: 2
-  Implied bound: 6
-  MIR: 3
-  Flow cover: 8
-  RLT: 48
-  BQP: 8
+  Gomory: 6
+  RLT: 37
+  Relax-and-lift: 2
+  BQP: 7
 
-Explored 4261 nodes (86106 simplex iterations) in 2.30 seconds (2.19 work units)
+Explored 3419 nodes (79979 simplex iterations) in 1.97 seconds (1.91 work units)
 Thread count was 4 (of 4 available processors)
 
-Solution count 7: 4.09067e-07 3.65496e-07 3.01041e-07 ... -0
+Solution count 5: 5.45673e-07 3.15209e-07 5.55176e-08 ... -0
 
 Optimization achieved user objective limit
-Best objective 4.090671358916e-07, best bound 2.650450315247e-02, gap -
-{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 2.299187183380127, "objval": 4.0906713589157945e-07, "objbound": 0.026504503152467922, "binaries": 42}
+Best objective 5.456731623638e-07, best bound 2.719355586510e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 1.9699890613555908, "objval": 5.45673162363758e-07, "objbound": 0.027193555865096274, "binaries": 42}
