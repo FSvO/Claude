@@ -20,7 +20,9 @@ Usage
   --hours         solver time limit per part in the proposed runs (default 5.5; more than 0; GitHub jobs
                   only allow up to 5.5, so a larger value leaves only the VM route).
   --label-prefix  prefix of the VM result-folder labels (default 'r<month><day><hour><minute><second>_',
-                  so labels do not reuse an old folder).
+                  so labels do not reuse an old folder); letters, digits, '.', '_' and '-' only.
+  Bad arguments (e.g. --hours <= 0, a target that is not a positive number) give exit code 2 before
+  anything is written.
 
 What it does (numbers match the sections of report.md)
   1. reads every result_*.json under the roots; an unreadable or truncated file is reported, never fatal;
@@ -294,6 +296,8 @@ def examine(row, n_wanted, target):
     if row.recomputed is not None and cutoff is not None and row.recomputed > cutoff and verdict != BETTER:
         row.better_why.append(f'recomputed minimum area {row.recomputed!r} of its points exceeds its cutoff '
                               f'{cutoff!r}, but its verdict is {verdict!r}')
+    if BETTER.encode() in row.raw and not row.better_why:     # e.g. two "verdict" keys: json keeps the last one
+        row.better_why.append(f'the file text contains {BETTER}, but its parsed verdict is {verdict!r}')
     beats_target = row.recomputed is not None and row.n_points >= n_wanted and row.recomputed > target
     if beats_target and cutoff != target:
         row.better_why.append(f"its {row.n_points} points have recomputed minimum area {row.recomputed!r}, above "
@@ -967,8 +971,10 @@ def run(argv=None):
           f"recomputed here {r.recomputed!r} from {r.n_points} point(s) ({above(own_cut)} its cutoff, "
           f"{above(a.target)} this run's target {a.target!r}).")
         P(f"  - why BETTER: {'; '.join(r.better_why)}")
+        why_not = (f'only {r.n_points} point(s), fewer than {a.n}, so they say nothing about n = {a.n}'
+                   if r.recomputed is not None and r.n_points < a.n else "its points do not beat this run's target")
         P(f"  - concerns n = {a.n}: **{yn(r.affects_this_n)}**"
-          + ('' if r.affects_this_n else f" (its n is {r.get('n')!r} and its points do not beat this run's target)"))
+          + ('' if r.affects_this_n else f" (its n is {r.get('n')!r}; {why_not})"))
         P(f"  - split `{short(r.get('split'), 200)}`, prefix `{short(r.get('prefix'), 200)}`")
         P(f"  - points: `{short(compact(r.get('points')), 2000)}`")
         P(f'  - file: `{r.path}`; copied to `{r.copied_to}`')
