@@ -26,17 +26,19 @@ on:
         description: "gurobi or scip"
         default: "gurobi"
       runner:
-        description: "Runner label (ubuntu-latest, or a larger-runner label if your organisation has one)"
+        description: "Linux runner label: ubuntu-latest, ubuntu-24.04 or ubuntu-22.04 (a larger runner must first be added to RUNNERS in this file)"
         default: "ubuntu-latest"
 
 permissions:
-  contents: write   # lets the summary job save results to the 'results' branch
+  contents: write   # lets the summary job save results to the 'results' branch (plan and solve are read-only)
 
 jobs:
   # 1) Check every input and turn "nodes" into the list of jobs. Inputs reach Python only through
   #    environment variables, never pasted into code, so a stray quote or $(...) cannot run anything.
   plan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read     # this job writes nothing to the repository
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       n: ${{ steps.plan.outputs.n }}
@@ -48,6 +50,8 @@ jobs:
       jobs: ${{ steps.plan.outputs.jobs }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # no git token left on disk: this job never pushes
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -66,6 +70,10 @@ jobs:
 
           MAX_JOBS = 256   # GitHub's limit for one job matrix
           MAX_SPLIT = 6    # at most 2^6 = 64 parts per region
+          # Linux x64 GitHub-hosted runners only: the solve steps need bash and GNU nproc (no macOS,
+          # no Windows), and an unknown label would leave every job waiting for a runner that never comes.
+          # To use a larger Linux runner of your organisation, add its exact label to this list.
+          RUNNERS = ('ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04')
 
           def fail(msg):
               # One line, escaped as GitHub requires, so user text cannot fake a workflow command.
@@ -108,8 +116,9 @@ jobs:
           if solver not in ('gurobi', 'scip'):
               fail(f'solver must be gurobi or scip, got {show(solver)}')
           runner = env('IN_RUNNER')
-          if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', runner):
-              fail(f'runner must be a runner label such as ubuntu-latest, got {show(runner)}')
+          if runner not in RUNNERS:
+              fail(f'runner must be one of {", ".join(RUNNERS)} (a larger Linux runner must first be '
+                   f'added to RUNNERS in the workflow file), got {show(runner)}')
 
           # ---- nodes
           def no_duplicate_keys(pairs):
@@ -138,6 +147,7 @@ jobs:
               return (i, j, k)
 
           jobs, seen = [], {}
+          regions = {}   # region solved by each job (set of (triangle, sign)) -> (node number, part)
           for num, node in enumerate(nodes, 1):
               where = f'node {num}'
               if not isinstance(node, dict):
@@ -202,6 +212,15 @@ jobs:
                   fail(f'{where} and node {other} got the same id {node_id}; change the order of one split')
               seen[node_id] = (num, key)
               for p in parts:
+                  # heil_tri.py builds its model only from the final triangle -> sign map (prefix, then
+                  # split bit i = (p >> i) & 1), so two jobs with the same map solve the same problem,
+                  # even when their splits list the triangles in another order.
+                  region = frozenset(prefix) | {(t, (p >> i) & 1) for i, t in enumerate(split)}
+                  if region in regions:
+                      other, other_part = regions[region]
+                      fail(f'{where} part {p} is the same region as node {other} part {other_part} '
+                           f'(same triangles, same signs); remove the duplicate')
+                  regions[region] = (num, p)
                   jobs.append({'id': node_id, 'prefix': prefix_str, 'split': split_str, 'part': p})
               if len(jobs) > MAX_JOBS:
                   fail(f'too many jobs: more than {MAX_JOBS} in total (GitHub limit); split the batch into several runs')
@@ -235,6 +254,8 @@ jobs:
     name: solve ${{ matrix.id }} part ${{ matrix.part }}
     runs-on: ${{ needs.plan.outputs.runner }}
     timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    permissions:
+      contents: read     # this job installs packages from PyPI, so it gets no write access
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -242,6 +263,8 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # no git token left on disk for the installed packages to find
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -276,6 +299,7 @@ jobs:
             solver_${{ matrix.id }}_${{ matrix.part }}.log
 
   # 3) Collect all results, summarise them, and save them to the 'results' branch.
+  #    The only job with write access (workflow-level 'contents: write'); it installs nothing from PyPI.
   summary:
     needs: [plan, solve]
     if: ${{ always() && needs.plan.result == 'success' }}
