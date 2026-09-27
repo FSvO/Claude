@@ -8,3 +8,5 @@
 21:23:12 UTC split region (bound/target 1.209) on [[0,3,8],[1,2,8],[0,2,4],[0,2,5]]: 13 pieces proved, 3 open; total runs 82, proved 73, open regions 16
 21:26:26 UTC split region (bound/target 1.094) on [[1,3,4],[1,3,5],[0,2,6],[0,2,7]]: 15 pieces proved, 1 open; total runs 98, proved 88, open regions 16
 21:29:54 UTC split region (bound/target 1.278) on [[1,3,4],[1,3,5],[0,2,6],[0,2,7]]: 14 pieces proved, 2 open; total runs 114, proved 102, open regions 17
+21:33:59 UTC split region (bound/target 1.281) on [[1,3,6],[1,3,7],[0,2,8],[1,3,8]]: 15 pieces proved, 1 open; total runs 130, proved 117, open regions 17
+21:42:15 UTC split region (bound/target 1.111) on [[4,5,6],[4,5,7],[4,5,8],[4,6,7]]: 12 pieces proved, 4 open; total runs 146, proved 129, open regions 20
