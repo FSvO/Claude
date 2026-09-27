@@ -1,0 +1,905 @@
+{
+ "reviews": [
+  {
+   "dim": "model-geometry",
+   "review": {
+    "findings": [
+     {
+      "id": "F1",
+      "title": "--zub is never checked: a zub below Delta_n would turn the model into a non-relaxation and still yield PROVED / CERTIFIED",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 48,
+      "claim": "The model is a relaxation only if zub >= Delta_9, and 0.5 always satisfies that. zub is an unvalidated command-line option (heil_tri.py:102). If someone set it below the target, z <= zub < target would make Gurobi's bound drop under the target at once, and the verdict (heil_tri.py:152) would say PROVED. summarize.py never reads zub, so it would then print CERTIFIED. This is latent: no runner passes --zub today, so it cannot affect the current run.",
+      "evidence": "grep finds zub only at heil_tri.py:12,48,102,114. It does not appear in the verdict code (136-155), in summarize.py, in run_parts.sh or in the workflow. All 9 sanity7 result files record zub=0.5. A synthetic folder (scratchpad/review/fidelity/synth_zub/) with zub=0.02, objbound=0.02 and verdict PROVED makes /home/user/heil/summarize.py print '**CERTIFIED ...**'.",
+      "recommendation": "In summarize.py, refuse to certify unless every row has zub >= 0.5 (or at least zub > target), or remove the --zub option. The mathematics does not change."
+     },
+     {
+      "id": "F2",
+      "title": "Bad --split/--prefix triangles are silently ignored (not sorted, in T+/T-, or duplicated)",
+      "severity": "info",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 78,
+      "claim": "A split or prefix triangle is used only if its tuple equals a sorted itertools.combinations triple and is not in tplus/tminus, which take precedence at lines 80-82. So [3,2,4] is ignored, as is (0,1,4), which is in T+ in the boundary case. For a triangle repeated in the split, or also present in the prefix, the last bit silently wins. In every such case each part is the parent model or a superset of the intended region, so soundness is kept, but whole jobs are wasted and summarize.py still counts the split as a valid refinement.",
+      "evidence": "heil_tri.py:74-84: fixed = {tuple(t): ...}; then 'for t in tris' over combinations(pts,3) (sorted); 'if t in tplus: s=1 elif t in tminus: s=0 elif t in fixed'. The current n=9 split [[2,3,4],...,[2,3,8]] and the README's suggested refinements ([0,3,k],[1,2,k],[0,2,k],[1,3,k], k>=4) are all sorted and outside T+, so they take effect.",
+      "recommendation": "Validate --split and --prefix entries in main(): sorted, distinct indices in range, not in tplus/tminus for the case, no duplicates between split and prefix. Exit with an error otherwise."
+     },
+     {
+      "id": "F3",
+      "title": "The docs overstate how much the certificate depends on the paper's Proposition 1; a short self-contained proof of the needed case split exists",
+      "severity": "info",
+      "kind": "cosmetic",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 74,
+      "claim": "The README (line 74) and summarize.py's CERTIFIED line say the certificate depends on Proposition 1 of the unrefereed arXiv:2607.15021. The only structural fact the code needs is that every optimal configuration has all three corners occupied, or has two distinct points on one side plus one on each other side (4 distinct points). An elementary affine-perturbation argument proves this (see verified_ok V6). Documenting it would take the unrefereed proposition off the critical path.",
+      "evidence": "check_casesplit.py output: Lemma 1 (explicit area-increasing affine map when all points on a side lie strictly on one side of its midpoint) was checked exactly on 1500 random instances. Lemma 2 gives ratio 1+4s^2 exactly. Enumerating 46656 boundary patterns, 28954 satisfy the Lemma-1 condition: 5832 are case (a), 23121 are (b) and not (a), and 1 is neither. That one is 'no corner, exactly the three side midpoints', which Lemma 2 excludes.",
+      "recommendation": "Add the two lemmas and the enumeration argument (or a citation that proves them) to the README's section 'What a CERTIFIED result means', and state that Proposition 1 is then not load-bearing. Optional."
+     }
+    ],
+    "verified_ok": [
+     "V1 Signed area (heil_tri.py:52-61): I transcribed x,y by hand from lines 34-45, including the expression x2=1-y2, the constants y0=y1=0 and x3=0, and the vertices-case constants. Exact symbolic expansion then gives A_model == det/2 for all 84/84 triples in both cases, confirmed by 2000 random exact Fraction evaluations each (check_area.py). A is linear in (W,x,y), since w() returns a constant, a LinExpr or an auxiliary W with W==x_i*y_j. heil_tri.py was never imported or run.",
+     "V2 Orientation linearisation (heil_tri.py:84-90): with b=1 the rows are z<=e and z<=1-e; the second is slack because z<=1/2 and e<=1/2. With b=0 the rows are z<=-e and z<=1+e, slack because e>=-1/2. |e|<=area(T)=1/2 for any three points in T. Choosing b=[e>=0] makes z=min|A| feasible, and this holds for any zub>=Delta_n.",
+     "V3 Boundary T+ set (heil_tri.py:63) is geometrically forced. 2A(0,1,k)=(x1-x0)*y_k for k=2..8, which is >=0 from x0<=x1 and y>=0. 2A(0,2,3)=x0*y2 - x0*y3 - y2*y3 + y3 and 2A(1,2,3) (same with x1) are multilinear in (x_a,y2,y3), so their minimum over [0,1]^3 is at a vertex; the vertex values are all in {0,1}, so both are >=0 even without x0<=x1 or x0+x1<=1. Sampling shows (0,2,4),(0,3,4),(1,2,4),(1,3,4),(2,3,4) take both signs, so leaving them to binaries/splits is correct.",
+     "V4 Vertices case (heil_tri.py:64-73): 2A(0,1,2)=1, 2A(0,1,k)=y_k>=0, 2A(0,2,k)=-x_k<=0 (tminus), 2A(1,2,k)=1-x_k-y_k>=0 on T. All four signs are forced (exact symbolic identities in check_area.py).",
+     "V5 The symmetry reductions hold jointly. Order: an S3 affine symmetry of T moves the 2-point side to the bottom; the reflection (x,y)->(1-x-y,y) (det -1, fixes the bottom as a set, swaps hypotenuse and left, maps x->1-x on the bottom) is applied if x0+x1>1; then p0,p1 are relabelled so x0<=x1 (the sum is symmetric); free points are sorted by the final x; then the part is read off the (2,3,k) signs. Steps after the symmetry are pure relabellings, orientation reversal is harmless because the T+ signs are forced for the image, and the 32 parts cover every sign pattern of the labelled configuration. check_relax.py canonicalised 5157 random exact configurations (3188 with a corner among p0..p3) and all satisfy every transcribed model constraint at z = true min area in their part; all 32 parts were hit. 1997/1997 corner-occupied configurations pass the vertices model.",
+     "V6 The case split (a) or (b) covers every optimal configuration (Delta_9>0, and an optimum exists by compactness), independently of the paper. Lemma 1: if every point on the bottom has x<1/2 (or the bottom is empty), f=I+eps*(M,t) with M=[[1/2+eta,0],[-1,-1/2+eta]], t=(0,1/2-eta) fixes B, keeps the hypotenuse and left lines invariant, keeps bottom points at y>=0, has tr M=2*eta>0 and so det>1; by R and S3 every side's midpoint must lie in the hull of the points on that side (checked exactly, 1500 instances). Lemma 2: if the only boundary points are the three midpoints, the affine map fixing (1/2,1/2) with p->(1/2+s,0), r->(0,1/2-s) has det 1+4s^2 > 1. Exhaustive pattern enumeration: the Lemma-1 condition and not (a) imply (b) except in the Lemma-2 pattern. This covers the patterns the task named: one corner with the adjacent side having only that corner fails the Lemma-1 condition; one corner plus points past both midpoints is (b); two corners plus points past the midpoints is (b).",
+     "V7 The model is exact, not just a relaxation: every feasible point is a genuine configuration in T with z<=|A| for every triple (T+ signs are forced; a wrong split sign gives z<=-|e|). So the part optima equal the maximum min-area over structured configurations, which is <=Delta_9, and no artificial slack blocks a true certificate.",
+     "V8 Cantrell's configuration has min area exactly 43/1568 (verify_config.py). The coordinator's locate_cantrell.py, re-run, gives parts 0, 29, 30, 31 with 3 embeddings each, T+ ok and no x-ties. My independent constructive reduction lands in part 30 with no constraint violations.",
+     "V9 Fixing the (2,3,k) signs after sorting is fine. The sort only fixes labels 4..8; the split rows z<=\u00b1A(2,3,k) do not interact with the sort constraints. Ties or zero areas leave a configuration feasible in at least one part (zero area means z=0 anyway), and summarize.py requires all 2^d parts."
+    ],
+    "depends_on_paper": [
+     "That heil_tri.py is literally 'model (1)' of arXiv:2607.15021 and that Proposition 1/Corollary 1 state what heil_tri.py:3-6 and README:29 say. This is attribution only and not load-bearing: the model was checked directly (V1-V4, V7).",
+     "What Proposition 1 would have to assert: every optimal n-point configuration (n>=4, Delta_n>0) either contains all three vertices of T, or has a side s with two distinct points such that each other side has a point, all four distinct. Corollary 1 would add that, up to the affine symmetries of T and the reflection (x,y)->(1-x-y,y), p0,p1 are on y=0 with x0<=x1 and x0+x1<=1, p2 is on x+y=1 and p3 on x=0. Both are re-derived here (V5, V6), so the certificate does not need the paper for them, subject to review of my Lemma 1/Lemma 2 argument.",
+     "README claims attributed to the paper, affecting only the narrative and validation, not the n=9 model: n=7 and n=8 proven optimal there; 10^-4 relative gap as the published certification standard; timings 22.6 s (n=7) and 2324 s (n=8); the n=8 validation target 0.03389799608776131 (implied Delta_8 = 0.0338946 in T) being the published n=8 value. Unverified."
+    ]
+   },
+   "verdicts": {
+    "verdicts": [
+     {
+      "id": "F1",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Reproduced. grep over /home/user/heil (excluding .git) finds 'zub' only at heil_tri.py:12,48,102,114 and as a recorded field in results/cloud/sanity7/*.json (all 9 files have zub=0.5). It is absent from summarize.py, run_parts.sh, run_heilbronn_local.ps1, CLOUD_SESSION_PROMPT.md and .github/workflows/heilbronn.yml, so no runner passes it and no workflow input exposes it. heil_tri.py:48 bounds z by zub, and any valid dual bound of max z s.t. z<=zub is <=zub. In the verdict code (heil_tri.py:152), 'ob <= tgt' then gives PROVED; INFEASIBLE/CUTOFF gives PROVED in the constraint and param cutmodes. I wrote my own synthetic 33-file folders (scratchpad/review/adv_geom/f1_zub.py; the verdict is transcribed from heil_tri.py:137-155). With zub=0.02 and objbound=zub, and also with zub=target exactly, /home/user/heil/summarize.py prints '**CERTIFIED ...**'. The control folder (zub=0.5, bound 0.0275) prints 'Not (yet) a complete certificate.' Two precision caveats. (1) The title's 'a zub below Delta_n ... still yield PROVED' overstates it: the trigger is zub <= target. For target < zub < Delta_9 the model is not a relaxation, but its optimum is zub > target, so it cannot give PROVED. (2) BETTER_CONFIGURATION_FOUND is checked first (heil_tri.py:150). If the solver returned an incumbent whose recomputed min area is above the target (possible only if Delta_9 > target), the verdict would be BETTER, not PROVED. Gurobi's actual status under this setting was not executed (forbidden). The conclusion follows from bound validity plus the verdict code. Latent misuse of an unused CLI option, so low is right."
+     },
+     {
+      "id": "F2",
+      "verdict": "confirmed",
+      "corrected_severity": "info",
+      "reasoning": "Reproduced with a transcription of heil_tri.py:13,62-90 (scratchpad/review/adv_geom/f2_signs.py, no solver). With split [[3,2,4]] and [[0,1,4]], every part has the parent's 75 binaries, and (0,1,4) stays forced at +1 by T+ (lines 80-82 take precedence over 'fixed'). With the duplicate split [[2,3,4],[2,3,4]], parts 0/1 get sign 0 and parts 2/3 get sign 1: the last bit wins. With split [2,3,4] plus prefix [[2,3,4],1], part 0 solves sign 0 and ignores the prefix (the split is assigned after the prefix at lines 74-76). Additional cases the finding did not list, same conclusion: an out-of-range index such as [2,3,9] is ignored, and a prefix sign outside {0,1} (e.g. 2 or -1) falls into the else-branch at line 86 and becomes a free binary. Each part is always the parent model or the model for a superset of the intended region (for contradictory prefixes the intended region is {z<=0}), so a PROVED part is still valid for the region summarize.py's covered() (lines 52-68) assigns to it. Soundness holds. The only effects are wasted jobs and, if keys don't match, a failed completeness check. The real n=9 split and the README refinement [[0,3,4],[0,3,5],[1,2,4],[1,2,5]] (README line 55) are sorted and outside T+, and they do take effect (73 and 74 binaries respectively). Info is correct."
+     },
+     {
+      "id": "F3",
+      "verdict": "confirmed",
+      "corrected_severity": "info",
+      "reasoning": "The mathematics is reproduced independently. Re-running check_casesplit.py gives exactly the stated numbers (46656 / 28954 / 5832 / 23121 / 1; the 'neither' pattern is the three midpoints). I also wrote a different enumeration (adv_geom/f3_casesplit.py): 18 concrete exact candidate boundary points (3 corners plus 5 open points per side at 1/4, 1/3, 1/2, 2/3, 3/4), all 2^18 subsets, with (b) tested by brute force for 4 distinct points. Result: 182457 satisfy the midpoint-hull condition, 32768 are (a), 149688 are (b) and not (a), and exactly one is neither: {three midpoints}. Hand proof. If every side has exactly one point, Lemma 1 forces that point to be the midpoint, which is the Lemma-2 pattern. Otherwise a side, WLOG the bottom, has 2 points, and a case check on 0, 1 or 2 occupied corners always yields distinct points on H and L. I checked the Lemma-1 map exactly as affine identities. It fixes (0,1) and keeps x=0 and x+y=1 invariant. Image x+y = s + eps(1/2-eta)(1-s) <= 1, and a bottom point gets y' = eps(1/2-eta-x). det = 1 + 2*eta*eps + eps^2(eta^2 - 1/4), which is > 1 for small eps. Lemma 2's ratio 1+4s^2 holds as a degree-2 identity. Together with compactness and Delta_9 > 0, this proves the (a)/(b) case split without the paper. The x0<=x1 and x0+x1<=1 reductions (Corollary 1) and the T+ signs are also elementary. Nothing structural therefore has to come from arXiv:2607.15021. Only the attribution 'model (1)' and the README's n<=8 history do. Minor inaccuracy in the finding: summarize.py:77 does not name Proposition 1; it says 'subject to the model assumptions in README', and the README (line 74; also line 29) names it. Documentation-only, so info."
+     }
+    ],
+    "verified_ok_disputes": []
+   }
+  },
+  {
+   "dim": "numerics-verdict",
+   "review": {
+    "findings": [
+     {
+      "id": "F1",
+      "title": "Tolerance inflation of the incumbent can exceed the n=9 margin, which would leave the Cantrell parts (0, 29, 30, 31) UNRESOLVED however far they are split",
+      "severity": "medium",
+      "kind": "numerics",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 89,
+      "claim": "Gurobi runs with default tolerances: FeasibilityTol 1e-6, IntFeasTol 1e-5, OptimalityTol 1e-6. Within those tolerances an incumbent's objval can sit above the true minimum area of its own points by more than the absolute margin of 2.742e-6. Gurobi's ObjBound is always >= ObjVal. So in a part containing Cantrell's configuration, an incumbent with objval > tgt makes ob <= tgt impossible, and the part stays UNRESOLVED. Further splitting cannot help, because the inflation comes from the tolerances and not from the size of the region.",
+      "evidence": "Worst case, derived from the model rows. Each area e = 0.5*(sum of up to 6 w-terms) (lines 60-61). Each w == x*y is enforced only to 1e-6 (line 58), which gives up to 3e-6. The row z <= e allows +1e-6. The big-M rows z <= e+(1-b), z <= -e+b (lines 89-90) with b = 1-1e-5, which IntFeasTol permits, allow a further +1e-5. The IntegralityFocus doc in gurobipy/_paramdetails.py describes exactly this 'trickle flow' y <= M*b pattern. Totals: up to 1.4e-5 for triangles with a binary (5.1x the margin) and up to 4e-6 for fixed-orientation triangles (1.46x). Measured on n=7 (review/overshoot7.py, review/infl7.py, exact Fractions): objval minus the exact min area of the incumbent's own points reaches 1.203e-6 in part 5. That is above the single-row FeasibilityTol, and 9 triangle areas sit below objval at the same time. objval - 7/144 reaches +7.9e-7 (part 5), +4.9e-7 (part 6), +4.8e-7 (part 7) and +2.4e-7 (part 0). The inflation is absolute while the margin is relative (1e-4*Delta), so the n=9 margin of 2.742e-6 is only 0.564x the n=7 margin of 4.861e-6. The worst n=7 inflation equals 29% of the n=9 margin (7.9e-7) and 44% of it (1.2e-6). The incumbent only ever increases, so long n=9 runs tend to keep the most inflated near-optimal solution they find. Only points are stored in the JSON, not b, w, MaxVio or IntVio, so the IntFeasTol contribution cannot be audited from existing results. Cantrell's configuration has 13 triangles at 43/1568 (checked exactly). Whether this actually happens at n=9 is unverified: the running probe's incumbent (0.0229611, log_31.txt:97) is still far from the optimum.",
+      "recommendation": "These are solver-parameter changes only; the mathematics and the target stay unchanged. Set FeasibilityTol=1e-9 and IntFeasTol=1e-9, or IntegralityFocus=1, and consider NumericFocus>=1. Record m.MaxVio, m.IntVio and m.ConstrVio (attributes exist in gurobipy/_attrconst.py:373-419) and the b values in the result JSON. Calibrate on the n=8 GitHub validation: measure objval minus the known n=8 optimum in the parts that contain the optimum."
+     },
+     {
+      "id": "F2",
+      "title": "MIPGap=5e-5 can end a Cantrell part as OPTIMAL with a bound above the target, where continuing would have reached BestBdStop",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 18,
+      "claim": "Gurobi declares OPTIMAL once bound <= objval*(1+MIPGap). If objval > tgt/(1+5e-5) = 0.027424840492669245, which is an overshoot above 43/1568 of more than 1.3711e-6 (half the margin), the solve can stop as OPTIMAL with ob in (tgt, objval*(1+5e-5)]. The verdict is then UNRESOLVED, although the solve might still have pushed the bound down to tgt. MIPGap plays no role in the proof logic: BestBdStop is the intended stop, and in parts with objval <= tgt/(1+5e-5) an OPTIMAL stop already implies ob <= tgt.",
+      "evidence": "MIPGap definition from the gurobipy/_paramdetails.py doc: gap = |zP-zD|/|zP|. Threshold computed exactly in review/thresholds.py: objval > 0.027424840492669245, overshoot > 1.3711049e-6. The n=7 analogue threshold was 2.43e-6 while the observed overshoot was <= 7.9e-7, so the sanity7 run never exercised this regime. Running the verdict block verbatim (heil_tri.py lines 137-155 exec'd in review/verdict_test.py) on 'OPTIMAL, objval 43/1568+2e-6, ob=objval*(1+5e-5)' gives UNRESOLVED.",
+      "recommendation": "Set MIPGap=0 (MIPGapAbs=0 too) so that only BestBdStop, tree exhaustion or the time limit end a run. The only cost is that hopeless parts (objval > tgt) run to the time limit instead of stopping early. This also removes any dependence on undocumented gap-based node pruning in Gurobi (unverified either way)."
+     },
+     {
+      "id": "F3",
+      "title": "PROVED rests on unsafe floating-point dual bounds; the n=9 margin is only about 2.7x the default tolerances, so the README's 'precise claim' is numerical, not rigorous",
+      "severity": "medium",
+      "kind": "soundness",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 76,
+      "claim": "The dual bound is valid in principle. Every exactly feasible configuration is feasible for the tolerance-relaxed model. Fathoming a node whose solution is feasible within tolerance happens at the node's LP value, which is still a valid bound for that node. So the tolerances inflate incumbents (the conservative direction) but do not by themselves invalidate ObjBound. However, node LP values, cuts and presolve reductions are computed in floating point with FeasibilityTol and OptimalityTol of 1e-6 and no safe (directed-rounding) bounding. BestBdStop also fires as soon as ob <= tgt, so the reported bound usually sits just below the target: n=7 part 7 stopped with tgt - ob = 8.75e-8. What is actually established is therefore Delta <= tgt + eps_num, with eps_num unquantified. This can make CERTIFIED false only if some configuration lies within about eps_num above tgt, or if a floating-point error is much larger than typical. The README (lines 75-76) states the claim as exact ('Delta9 <= (43/1568)(1+1e-4)') and describes the margin as covering tolerances of 'about 1e-6'. For n=9 the margin is 2.742e-6 absolute.",
+      "evidence": "sanity7/log_5.txt:14-20 lists the non-default parameters, and FeasibilityTol, OptimalityTol and IntFeasTol are not among them, so the defaults from _paramdetails.py apply (1e-6, 1e-6, 1e-5). result_boundary_7.json: objbound 0.048615884677346656 against cutoff 0.04861597222222222. A pessimistic bound on the LP error from dual infeasibility, OptimalityTol x (136 columns + 365 presolved rows) x range 1, is about 5e-4 (worst case, not typical). The paper's standard cannot be checked (arXiv blocked).",
+      "recommendation": "State the result as a numerical certificate, e.g. 'Delta9 <= tgt up to solver tolerances'. Alternatively, build in a buffer without changing the claimed target: stop at a stricter internal value such as BestBdStop = 43/1568*(1+5e-5), keeping the verdict against tgt (this conflicts with F1/F2 unless the tolerances are tightened first). Or have the PROVED parts re-verified with an exact or safe-bounding solver (e.g. exact SCIP / VIPR-style certificates)."
+     },
+     {
+      "id": "F4",
+      "title": "Out-of-memory projection for 5.5 h runs: no NodefileStart or SoftMemLimit, and an OOM leaves the part with no JSON",
+      "severity": "medium",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 17,
+      "claim": "In bdstop mode the open-node tree of an n=9 part grows linearly at about 1 KB per open node. A 5.5 h job extrapolates to roughly 14-16 GB, which reaches the RAM of this VM. Gurobi's out-of-memory error, or the kernel OOM killer, would end heil_tri.py before json.dump (line 156). The part then has no result file: summarize.py counts it as uncovered but does not list it among the UNRESOLVED parts. Pruning in this mode happens only against the incumbent (0.02296 since 71 s in the probe), not against tgt = 0.027426, so nodes with bounds in between stay open.",
+      "evidence": "Read-only samples of the running probe (pid 896). At 433 s: RSS 390,344 kB with 367,712 open nodes (log line at 430 s). At 572 s: RSS 488,184 kB with 465,316 open nodes. That is about 1.00 kB per node and 700-816 new open nodes/s. The growth is linear in the log (e.g. 60 s: 60,787; 300 s: 263,044; 420 s: 360,560). Linear extrapolation to 19,800 s gives 13.8-16.2 M nodes. `free -m` shows 16,095 MB total. NodefileStart and SoftMemLimit defaults are 1e100 (_paramdetails.py). This is a projection: the growth rate may change, and the GitHub runner RAM was not verified here.",
+      "recommendation": "Set NodefileStart=0.5 (the value Gurobi's docs recommend) and/or SoftMemLimit of about 12 GB. SoftMemLimit ends gracefully with status 17, and the JSON would then be written with UNRESOLVED. Optionally also set Cutoff=tgt next to BestBdStop so that nodes with bound < tgt are pruned and reduced-cost fixing uses tgt. The speedup is unverified; if adopted, check the CUTOFF-status path (F5) and re-run the n=7 sanity check."
+     },
+     {
+      "id": "F5",
+      "title": "INFEASIBLE or CUTOFF counts as PROVED in any cutmode, although in the default bdstop mode neither can legitimately occur",
+      "severity": "low",
+      "kind": "soundness",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 152,
+      "claim": "In bdstop mode the model is always feasible: z=0 with collinear points satisfies every row. Gurobi finds this objective-0 solution before presolve. An INFEASIBLE status in bdstop mode could therefore only come from a solver or numerical failure, yet line 152 would mark the part PROVED without any bound check. The CUTOFF path reads m.ObjBound at status 6 (line 121). Whether that attribute is available after a CUTOFF is unverified; if it is not, the run crashes without a JSON (safe, but a lost proof in 'param' mode).",
+      "evidence": "All 9 sanity7 logs contain 'Found heuristic solution: objective -0.0000000' (e.g. log_5.txt:35). The verdict block run verbatim on status 'INFEASIBLE' with no bound returns PROVED (review/verdict_test.py).",
+      "recommendation": "Accept INFEASIBLE only when cutmode=='constraint' and CUTOFF only when cutmode=='param'. In bdstop mode require ob <= tgt, and treat INFEASIBLE with SolCount>0 as an error. Wrap the ObjBound/ObjVal reads in try/except so that a JSON is always written."
+     },
+     {
+      "id": "F6",
+      "title": "The BETTER safeguard chain is brittle: summarize prints the raw unclipped points, and verify_config.py rejects real solver output",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/summarize.py",
+      "line": 35,
+      "claim": "heil_tri.py recomputes the minimum area on clipped points (lines 143-149) but stores only the raw points. summarize.py:35 prints the raw points for the exact check. verify_config.py:22 asserts exact membership in T after limit_denominator(1e6) (line 12), so it crashes on points that are about 1e-8 outside T. limit_denominator can also move a coordinate by up to about 4e-7, which is comparable to the margin in area terms. This cannot produce a false CERTIFIED, because any BETTER already blocks CERTIFIED (summarize.py:76), and a false BETTER from round-off is impossible above about 1e-15. But the documented exact verification of a genuine counterexample can fail or misjudge it.",
+      "evidence": "Raw points of sanity7/result_boundary_4.json written to review/p4_raw.txt: point (0.856543815619691, 0.14345619460045622) has x+y-1 = +1.02e-8, and `python3 verify_config.py p4_raw.txt` stops with 'AssertionError: point ... is outside the triangle'. F('0.0000004').limit_denominator(10**6) returns 0 (error -4e-7); F('0.5000003') returns 500000/999999 (error 2e-7).",
+      "recommendation": "Store the clipped points in the JSON as exact rationals (Fraction(float) is exact) and print those. In verify_config.py, convert decimals with Fraction(str) exactly, without limit_denominator, or clip explicitly and report the change."
+     },
+     {
+      "id": "F7",
+      "title": "Configurations that beat 43/1568 by less than the 1e-4 margin are never surfaced",
+      "severity": "low",
+      "kind": "completeness",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 150,
+      "claim": "BETTER_CONFIGURATION_FOUND compares only against tgt = 43/1568*(1+1e-4). An incumbent whose exact minimum area lies in (43/1568, tgt] would be labelled PROVED or UNRESOLVED. summarize.py does not display recomputed_min_area, so such a new record, which README line 23 promises to report, would go unnoticed.",
+      "evidence": "Lines 150-155 compare true_min against tgt only. summarize.py:25-26 prints objval and objbound but not recomputed_min_area.",
+      "recommendation": "In summarize.py, flag any recomputed_min_area > 43/1568 (or > the record value passed in) for exact checking, separately from the certification verdict."
+     },
+     {
+      "id": "F8",
+      "title": "The SCIP fallback in default bdstop mode has no early stop at the target",
+      "severity": "low",
+      "kind": "efficiency",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 28,
+      "claim": "For solver=scip only cutmode 'param' sets an objective limit. With the default cutmode 'bdstop' SCIP gets no bound-based stop and solves each part to limits/gap 1e-6, which is much more work than proving bound <= tgt. The verdict itself stays sound, because SCIP's dual bound is valid at any status.",
+      "evidence": "Lines 26-28: only setObjlimit(cutoff) under cutmode=='param'. Lines 127-130: objbound = getDualbound().",
+      "recommendation": "When solver=scip, default to cutmode 'param' (objlimit gives status 'infeasible', which maps to PROVED), or set an equivalent dual-bound stop if the installed SCIP version supports one (unverified)."
+     }
+    ],
+    "verified_ok": [
+     "Status codes: gurobipy 13.0.3 (_grb.py:54-72) defines 15 = USER_OBJ_LIMIT, 11 INTERRUPTED, 12 NUMERIC, 13 SUBOPTIMAL, 16 WORK_LIMIT, 17 MEM_LIMIT. All status-15 n=7 logs print 'Optimization achieved user objective limit' (e.g. log_7.txt:122). The code's label 'BOUND_REACHED' is cosmetic only, since the verdict never keys on it.",
+     "No wrong PROVED from status handling: statuses 4, 7, 8, 10, 11, 12, 13, 16 and 17 get objbound=None, and their names ('INF_OR_UNBD' or the number as a string) are not in ('INFEASIBLE','CUTOFF'), so the verdict is UNRESOLVED. Confirmed by running lines 137-155 verbatim in review/verdict_test.py (NUMERIC and INTERRUPTED both give UNRESOLVED). Excluding ObjBound at 7/8/10/11/16/17 only loses bounds that could not be <= tgt anyway, because BestBdStop would already have stopped the run.",
+     "A bound-based PROVED requires ob <= tgt whatever the status. A BestBdStop stop with ob even 1e-15 relative above tgt gives UNRESOLVED (tested), which is safe. All 5 n=7 status-15 runs have ob < tgt (smallest slack 8.75e-8, part 7).",
+     "BestBdStop semantics: the doc (_paramdetails.py:94-96) says stop when the bound is 'at least as good as' the value, which for a MAXIMIZE model means ObjBound <= BestBdStop. The logs agree (ob >= objval and ob <= tgt at the stop). The BestBdStop value is the same float as tgt (log: 2.7426211734693878e-02).",
+     "ObjBound is read correctly at statuses 2 and 15. JSON objbound matches the log's 'best bound' (log_7: 4.861588467735e-02 = 0.048615884677346656; log_5: 4.861190065484e-02 = 0.048611900654842194).",
+     "Tolerances do not by themselves invalidate the dual bound: exact configurations stay feasible in the tolerance-relaxed model. Nodes whose solutions are feasible within FeasibilityTol or IntFeasTol are fathomed at their LP value, which is a valid bound for that node, and ObjBound >= ObjVal always holds. So tolerance effects push incumbents up (conservative); the remaining risk is floating-point LP, cut and presolve error (F3).",
+     "A genuine better configuration found as an incumbent cannot become PROVED: ob >= objval, and BETTER is checked before PROVED (line 150). A BETTER verdict blocks CERTIFIED (summarize.py:76). Clipped points lie in T, and float area error is about 1e-15, so no false BETTER occurs beyond round-off.",
+     "The target float equals 43/1568*1.0001 to 5.2e-20. The absolute margin is 2.7423469e-6 and the MIPGap early-OPTIMAL threshold is objval > 0.027424840492669245 (review/thresholds.py).",
+     "NonConvex=2 is accepted by Gurobi 13.0.3 without warnings (grep for warn/deprecat/numer/violat over the sanity7 logs finds nothing; the logs say 'Solving non-convex MIQCP to global optimality'). The _paramdetails.py doc says the default -1 is 'almost equivalent to 2', so the setting is harmless. MIPFocus=2 (proof focus) suits bound certification. Threads=$(nproc)=4 matches 'using up to 4 threads'.",
+     "The n=7 sanity run used exactly the intended parameters in all 9 logs: BestBdStop, MIPGap 5e-05, MIPFocus 2, NonConvex 2, Threads 4, TimeLimit 360. All other tolerances were at their defaults.",
+     "The n=9 part-31 model has 165 rows, 135 columns and 50 quadratic constraints (log_31.txt:25). 50 matches the count of (i,j) pairs with non-constant x_i and y_j, i != j, in the boundary case, and the model fits the size-limited pip licence.",
+     "The model is always feasible at z=0: the heuristic objective 0 appears in all 9 n=7 logs, and by hand, collinear points on x=0 satisfy all fixed orientations in both cases. So bdstop runs always have SolCount >= 1 and points are available for the BETTER check."
+    ],
+    "depends_on_paper": [
+     "README lines 23 and 76 say this uses 'the same certification standard (1e-4 gap) as the n <= 8 results'. Whether the paper used relative gap 1e-4, default Gurobi tolerances and unsafe floating-point bounds, and how it stated its claim (exact or up to 1e-4), can only be checked in arXiv:2607.15021.",
+     "That model (1) in the paper enforces orientation with the same big-M form (z <= e+(1-b), z <= -e+b, M=1) and the same w = x*y substitution. The IntFeasTol and FeasibilityTol inflation analysis in F1 applies to the code as written; whether the paper's formulation, and hence its n=7/n=8 numerical experience, is identical needs the paper.",
+     "Proposition 1 and Corollary 1 (p0,p1 on y=0 with x0<=x1 and x0+x1<=1, p2 on the hypotenuse, p3 on x=0, free points sorted by x, and the separate corners-occupied case), including the T+ orientation fixings. PROVED/CERTIFIED is only as sound as these WLOG reductions, which cannot be checked without the paper.",
+     "The paper's runtimes (n=7 22.6 s, n=8 2324 s; README line 81), used for timing and memory planning.",
+     "Whether the paper's n=8 certificate met or discussed incumbent inflation near the optimum against its margin (the n=8 analogue of F1/F2). That would be the most direct calibration for the n=9 Cantrell parts."
+    ]
+   },
+   "verdicts": {
+    "verdicts": [
+     {
+      "id": "F1",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "I reproduced the mechanism and checked the cited lines: default tolerances (sanity7/log_*.txt 'Non-default parameters' has no FeasibilityTol, IntFeasTol or OptimalityTol), W==x*y at heil_tri.py:58, z<=e at :84 and the big-M rows at :89-90. Re-running review/overshoot7.py and infl7.py gives the stated n=7 numbers: objval-7/144 = +7.9e-7 in part 5, objval minus the min area of its own points = 1.203e-6, and 9 triangles below objval. Cantrell has 13 triangles at 43/1568 (checked exactly). ObjBound >= ObjVal holds in all 9 sanity JSONs. New independent evidence, review/verifier/tol_lp.py: I linearised the model at the exact optimum and maximised z over the tolerance box with an LP (HiGHS, perturbations in units of 1e-6, all 12 Cantrell embeddings). Worst case for z-43/1568 with FeasibilityTol on qconstrs, rows and bounds and exact b: 3.33-3.40e-6 in parts 0, 29, 30 and 31. That exceeds the 2.742e-6 margin. With IntFeasTol trickle on the binary rows it is 1.16-1.34e-5. So the claim that the incumbent 'can exceed tgt' is correct even without IntFeasTol. Likelihood is less clear. With only the qconstr tolerance, which is how node LP vertices normally exploit it, the worst case is 2.20-2.34e-6, below the margin. The calibration in calib7.py shows the n=7 runs reached only 12-43% of the qconstr-only worst case and 8-26% of the full-FeasibilityTol worst case. F1 would need about 81% of the full worst case, or real integrality trickle. Trickle is unlikely: the LP pushes an unbranched b toward about e+1/2, and branching fixes b to exactly 0 or 1. The claim that further splitting cannot help is correct. On the recommendation: FeasibilityTol=1e-9 may make spatial branching much deeper. The worst case scales linearly, so FeasibilityTol=1e-7 plus IntegralityFocus=1 already puts it at about 3.4e-7, well inside both the margin and the F2 window. The medium severity stands: F1 blocks certification for good if it happens, but it is not shown to be likely."
+     },
+     {
+      "id": "F2",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "MIPGap=5e-5 is at heil_tri.py:18. The MIPGap doc (_paramdetails.py:823) gives gap=|zP-zD|/|zP|, and MIPGapAbs defaults to 1e-10, which is irrelevant here. thresholds.py reproduces: an early OPTIMAL can leave ob > tgt only if objval > 0.027424840492669245, i.e. an overshoot above 1.3711e-6. verdict_test.py (lines 137-155 exec'd verbatim) returns UNRESOLVED for 'OPTIMAL, objval=43/1568+2e-6, ob=objval*(1+5e-5)'. The logic is right: if objval*(1+5e-5) > tgt, the gap test can fire while ob is still in (tgt, objval*(1+5e-5)]. If objval <= tgt/(1+5e-5), an OPTIMAL stop implies ob <= tgt. My LP (tol_lp.py) makes this the more realistic of the two inflation failures. The qconstr-only local worst case in the Cantrell parts is 2.20-2.34e-6, which lies inside F2's window (1.371e-6, 2.742e-6] and not in F1's. Reaching the window needs about 59-62% of that worst case, while n=7 runs reached at most 43% in about 10k nodes. n=9 runs explore millions of nodes and keep the maximum incumbent, so the window is reachable but not shown to be reached. The fix (MIPGap=0) is free for soundness. The note on undocumented gap-based pruning is correctly marked unverified."
+     },
+     {
+      "id": "F3",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "The substance is right. Gurobi's bounds are computed in floating point with no safe or verified bounding. BestBdStop=tgt leaves no internal buffer: result_boundary_7.json has tgt-ob = 8.75e-8, recomputed. Gurobi's own BestBdStop doc (_paramdetails.py:95) says to 'always include a small tolerance', though that is about termination. So the certificate establishes Delta9 <= tgt + eps_num with eps_num unquantified. The 5e-4 figure is labelled a pessimistic worst case. Two overstatements: (a) the README does not state the claim as unconditionally exact. Line 75, under 'What it depends on', says 'It also depends on the numerical global optimiser. Floating-point tolerances are about 1e-6 absolute...'. So the dependence is disclosed; the remaining problem is wording and an unquantified error. (b) 'the reported bound usually sits just below the target' holds only for parts containing the optimum. The other five status-15 n=7 runs stopped with slack 3.6e-5 to 1.4e-3. No concrete mechanism is shown that could produce a false CERTIFIED. That would need a real configuration beating the record by more than 2.74e-6 and hidden by a floating-point bound error, which is the standard caveat of any floating-point B&B certificate. Whether the paper's n<=8 standard is any stronger is unverified, since arXiv is blocked. I downgraded it to low (documentation and claim scope). Exact re-verification remains a sensible optional step."
+     },
+     {
+      "id": "F4",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "My own read-only samples of pid 896 (/proc/896/status and log_31.txt) give VmRSS 1,260,260 kB at 1710 s with 1,297,705 open nodes, about 0.97 kB per open node. The reviewer measured about 1.05 kB earlier. Open nodes grow roughly linearly: 60,787 at 60 s, 488,089 at 600 s, 928,988 at 1200 s and 1,275,996 at 1680 s, about 714-750 per second. Linear extrapolation to 19,800 s gives 14.2-14.9M nodes and about 13.8-15.8 GB. `free -m` shows 16,095 MB total and no swap. So the risk is real but borderline (the reviewer's 'reaches the RAM' should read 'may reach'), and it is still a projection. NodefileStart and SoftMemLimit default to 1e100 (_paramdetails.py:1098-1106, 1624-1632), and status 17 = MEM_LIMIT (_grb.py). heil_tri.py has no try/except, and json.dump is at :156, so a GurobiError or the OOM killer leaves no JSON. A synthetic test (review/verifier/oomcase: 31 PROVED parts, part 31 missing, vertices PROVED) confirms that summarize.py prints 'fully covered: False' and 'Not (yet) a complete certificate' but neither lists nor names the missing part. That is safe but confusing. Minor staleness: the probe incumbent is now 0.0235412 (since 1110 s), not 0.02296. The point that nodes with bounds in (incumbent, tgt] are never pruned in bdstop mode is correct. Mitigation: the probe's bound (0.0578 at 1710 s against tgt 0.0274) suggests such parts would probably end UNRESOLVED anyway, so the main loss is bookkeeping and the log-only result. The GitHub runner RAM was not verified in-session."
+     },
+     {
+      "id": "F5",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Line 152 maps status 'INFEASIBLE' or 'CUTOFF' to PROVED without a bound check, and verdict_test.py confirms that 'INFEASIBLE' with no bound gives PROVED. In bdstop mode the model is always feasible. Take p0=p1=p3=(0,0), p2=(0,1) (y2=1) and all free points at (0,t): every area is 0, every fixed-orientation row z<=\u00b1e holds at z=0, and the big-M rows give z<=1-b and z<=b. The trivial heuristic 'objective -0.0000000' appears in all 9 sanity7 logs and at probe log_31.txt:35. With SolCount>=1 Gurobi cannot legitimately return INFEASIBLE, so the path is reachable only through a solver failure. Cutoff is set only under cutmode 'param' (line 19), so CUTOFF cannot occur in bdstop mode. Whether ObjBound can be read after a CUTOFF (line 121) is unverified, since Gurobi may not be run. This is a defensive gap, not a demonstrated false PROVED, so low is right."
+     },
+     {
+      "id": "F6",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Reproduced. `python3 /home/user/heil/verify_config.py review/p4_raw.txt` stops with 'AssertionError: point (Fraction(30027, 35056), Fraction(88981, 620266)) is outside the triangle'. The raw point (0.856543815619691, 0.14345619460045622) has x+y-1 = +1.02e-8 (overshoot7.py: Tviol=1.02e-08). heil_tri.py:125 stores the raw points and lines 143-149 clip only a local copy. summarize.py:35 prints r.get('points'), which are the raw points. limit_denominator(10**6) checks: 0.0000004 becomes 0 (-4e-7) and 0.5000003 becomes 500000/999999 (+2e-7). Small correction: the worst-case displacement near 0 or 1 is 5e-7 (0.0000005 becomes 0), not 4e-7. This cannot produce a false CERTIFIED (summarize.py:76 blocks on any BETTER). It only hampers the documented exact check."
+     },
+     {
+      "id": "F7",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Lines 150-155 compare recomputed_min_area only against tgt, and summarize.py:25-26 prints objval and objbound but never recomputed_min_area. An incumbent with exact min area in (43/1568, tgt] would therefore be labelled PROVED or UNRESOLVED without a flag. objval cannot stand in for it: tolerance inflation already makes objval > 7/144 in n=7 parts 0, 5, 6 and 7, so an objval above 43/1568 cannot tell a genuine record from inflation. README:23 says a better configuration would be a new record. This is a reporting gap with no soundness impact."
+     },
+     {
+      "id": "F8",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Lines 26-28 set only limits/time, parallel/maxnthreads and limits/gap=1e-6, plus setObjlimit under cutmode=='param'. With the default cutmode 'bdstop' (line 103), SCIP gets no stop tied to the target. The verdict stays sound: objbound = getDualbound() at any non-infeasible status (line 129), and PROVED still requires ob <= tgt, so the cost is efficiency only. pyscipopt is not installed on this VM, so an equivalent SCIP dual-bound limit parameter could not be checked (unverified)."
+     }
+    ],
+    "verified_ok_disputes": [
+     "Item 3 ('All 5 n=7 status-15 runs have ob < tgt'): there are 6 status-15 (BOUND_REACHED) runs, not 5. They are boundary parts 1, 2, 3, 4 and 7 and also result_vertices_0.json (status BOUND_REACHED, objbound 0.04716993979718759), and log_vertices.txt also prints 'Optimization achieved user objective limit'. The conclusion still holds: all 6 have ob < tgt, the smallest slack being 8.75e-8 in part 7. This is a miscount, not a soundness issue.",
+     "Item 6 (tolerances do not invalidate the bound; the 'remaining risk is floating-point LP, cut and presolve error'): the conclusion is right, and it can be made sharper. My local LP (review/verifier/tol_lp.py) shows that the tolerance-relaxed model around Cantrell's configuration reaches z = 43/1568 + 3.3-3.4e-6 under FeasibilityTol alone, which is above tgt. So the tolerance-feasible region of the Cantrell parts does contain points with z > tgt. Soundness is unaffected, because such points can only raise incumbents and bounds. But it means the 'conservative' direction is not harmless for completeness (see F1 and F2), and it is not only a floating-point concern. Also, whether Gurobi prunes nodes against the incumbent with any gap tolerance (which would affect ObjBound validity near the incumbent) is undocumented and unverified, so calling FP LP, cut and presolve error the only remaining risk is not fully established."
+    ]
+   }
+  },
+  {
+   "dim": "summarize-completeness",
+   "review": {
+    "findings": [
+     {
+      "id": "S1",
+      "title": "Corners case accepted from any single PROVED part of a split vertices run",
+      "severity": "high",
+      "kind": "soundness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 71,
+      "claim": "vert_ok checks only case == 'vertices', verdict == 'PROVED' and prefix == '[]'. It never checks r['split']. heil_tri.py applies --split/--part in the vertices case too (lines 74-76 build `fixed` for every case). So if someone splits the corners case by hand (heil_tri.py --case vertices --split S --part k), ONE proved part k is enough for summarize.py to call the whole corners case proved, and it prints CERTIFIED. The other 2^|S|-1 regions can be UNRESOLVED or missing.",
+      "evidence": "Synthetic test h2 (scratchpad/review/tests.py, output in tests_out.txt) has 32 boundary parts PROVED, one vertices result with split [[3,4,5],[3,4,6]] part 2 PROVED, and part 0 UNRESOLVED. summarize printed 'Corners-occupied case proved: True' and '**CERTIFIED'. signs.py, a pure-Python copy of heil_tri.py lines 13 and 62-90, confirms the split is applied in the vertices case: part 2 fixes (3,4,5)=0 and (3,4,6)=1, with 63 binaries versus 65 unsplit. The shipped runners never pass --split for vertices (heilbronn.yml:89, run_parts.sh:18, run_heilbronn_local.ps1:32), so this needs a manual run. That manual run is the natural next step if the n=9 corners case times out, because no other refinement path exists (see C1). Realistic tree R3 in test_merge.py: raw summarize over the n=9 copy again reported 'Corners-occupied case proved: True' when the top-level vertices run was UNRESOLVED and only 1 of 4 vertices sub-parts was proved.",
+      "recommendation": "Do not put any vertices result with a non-empty split or prefix into the folder given to summarize.py. merge_results.py (scratchpad/review) rejects these loudly and exits with code 2. If summarize.py is ever changed, vert_ok must require json.loads(split) == [] (or run the same covered() tree keyed on case)."
+     },
+     {
+      "id": "S2",
+      "title": "zub is not checked: a run with zub <= target is PROVED without proving anything",
+      "severity": "medium",
+      "kind": "soundness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 69,
+      "claim": "summarize.py checks that all rows share n and cutoff, but not zub. heil_tri.py line 48 bounds z to [0, zub]. With zub <= cutoff the root bound is already <= cutoff, so the verdict is PROVED whatever the geometry (heil_tri.py:152). With zub only slightly above cutoff, solver tolerances make the same thing likely.",
+      "evidence": "Synthetic test f3: all 33 results given zub=0.01 gives '**CERTIFIED'. Mixed solver/cutmode/timelimit/threads (f4) is also accepted; that is sound because the verdict depends only on status, objbound and cutoff (heil_tri.py:150-155). No shipped script passes --zub (heilbronn.yml:61/89, run_parts.sh:18/20, ps1:32/37), so the default 0.5 from heil_tri.py:102 applies. The risk is latent: one hand-run probe with a smaller zub placed in the merged folder would certify its region without proof.",
+      "recommendation": "When merging, keep only results with zub == 0.5 (merge_results.py does this: hard reject, exit code 2). Never use --zub below 0.5 for certification runs."
+     },
+     {
+      "id": "C1",
+      "title": "No supported way to refine the corners case; the printed advice sends the user to a boundary run",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 48,
+      "claim": "covered() only looks at case == 'boundary' (line 48), and vert_ok requires the literal prefix '[]' (line 71). A corners case refined through prefixes is never recognised. For an UNRESOLVED vertices result, summarize.py prints 'case vertices part 0: prefix = []' with the generic advice to paste it into the workflow's prefix input (README step 5). The workflow's boundary job hard-codes --case boundary (heilbronn.yml:61), and the vertices job has no split/prefix inputs (heilbronn.yml:89). Following the advice therefore does nothing for the corners case. If the n=9 corners case does not finish in one run, CERTIFIED cannot be reached except through the unsound path in S1.",
+      "evidence": "Test h4: vertices UNRESOLVED at top level, plus 4 vertices results whose prefixes cover all sign patterns of [[3,4,5],[3,4,6]], all PROVED, gives 'Corners-occupied case proved: False'. Test h1: a vertices result with a non-empty prefix is not accepted. Test a4 shows the printed line '- case vertices part 0: prefix = []'.",
+      "recommendation": "If the corners case times out on GitHub (5.5 h limit), re-run it unsplit on the VM with a longer limit: run_parts.sh <label> 9 <target> '[]' '[]' <hours> vertices. summarize.py accepts that. Splitting the corners case needs a change to summarize.py, which is outside the current rules."
+     },
+     {
+      "id": "C2",
+      "title": "Duplicate results depend on path sort order: a later-sorting UNRESOLVED hides a PROVED",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 58,
+      "claim": "rs = {r['part']: r ...} keeps the LAST result for each (prefix key, split string, part), and rows come in sorted(file path) order (line 13). A PROVED result is dropped whenever an UNRESOLVED duplicate sorts after it, and the region then counts as uncovered. The effect is conservative only: the winner is always one of the actual verdicts for exactly that region, and any BETTER_CONFIGURATION_FOUND anywhere blocks CERTIFIED.",
+      "evidence": "c2: GitHub run-9 part 17 UNRESOLVED plus VM results/cloud/retry17 part 17 PROVED gives not certified, because 'results/cloud' sorts before 'results/run-'. c3: run-10 PROVED plus run-9 UNRESOLVED gives not certified, because 'run-10' sorts before 'run-9'. c4 has the same data as c2 but the VM folder is named 'vm_retry17', and the result is CERTIFIED: renaming a folder changes the verdict. c1 (GitHub PROVED, VM UNRESOLVED) gives CERTIFIED. Results do not depend on PYTHONHASHSEED (seeds 0-5 tested). The running probe results/cloud/probe9_p31 (job.sh: split S5, part 31, prefix [], timelimit 3600) will create exactly such a duplicate. A later long re-run under e.g. results/cloud/p31long sorts BEFORE probe9_p31 and would be hidden if the probe ends UNRESOLVED. CLOUD_SESSION_PROMPT.md steps 4-5 make such duplicates expected. The 'Unresolved parts' list also shows parts that have a PROVED duplicate (c1 output), which can trigger unneeded refinements.",
+      "recommendation": "Merge with de-duplication that keeps a PROVED result if one exists (merge_results.py). Alternatively, re-run an unresolved part as prefix = <printed prefix>, split = '[]' rather than with the same split and part. That gives a separate group key, and summarize.py then accepts it whatever the file order (tests r1/r2 in test_rerun_prefix.py are CERTIFIED with the folder sorting before or after). signs.py shows this model is identical to the (split S5, part k) model for all 32 k."
+     },
+     {
+      "id": "C3",
+      "title": "Split strings are compared as raw text, so whitespace differences break a split into incomplete pieces",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 56,
+      "claim": "Prefixes are normalised (json.loads, sort, json.dumps at lines 50 and 53), but splits within a group are compared as raw strings (lines 56 and 58). '[[2,3,4],...]' and '[[2, 3, 4], ...]' are the same to heil_tri.py (json.loads, line 112) but count as two different splits here, and neither is complete on its own.",
+      "evidence": "d1: GitHub part 17 UNRESOLVED plus a VM re-run of part 17 PROVED, with the split written with spaces, gives not certified. d2: parts 0-15 with the compact split on GitHub and 16-31 with the spaced split on the VM gives not certified, although every region is PROVED. d5: a child split written with spaces is fine as long as all its sub-parts use the same spelling. This is realistic in CLOUD_SESSION_PROMPT.md step 5, where some sub-parts of one refinement run on the VM and the rest on GitHub. In test_merge.py R1, sub-parts 0-7 were on the VM and 8-15 on GitHub run-11 with a spaced split; the raw n=9 copy was not certified.",
+      "recommendation": "Paste the exact same split text into every run for a given prefix. Before summarising, write the split field of each copied file in one canonical form (merge_results.py does this in its copies, keeps the original in split_original, and never touches the source files)."
+     },
+     {
+      "id": "O1",
+      "title": "README step 6 can never print CERTIFIED: the results branch also holds the n=8 validation",
+      "severity": "medium",
+      "kind": "operational",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 56,
+      "claim": "README step 6 says to check out the 'results' branch and run 'python summarize.py results' over all runs. Every run, including the required n=8 validation (README step 3), is saved to the same branch as results/run-<k>-n<n> (heilbronn.yml:125). summarize.py globs recursively and then finds more than one n and cutoff, so tgt_ok is False. The same happens if results/cloud/sanity7 (n=7) is in the tree. Writing the target with fewer digits also counts as a different target: float('0.0274262117346939') != 0.027426211734693878.",
+      "evidence": "f5: a complete n=9 set plus results/run-1-n8 gives 'All results use the same n and target: False', not certified. f1 and f2 behave the same way. R1 (test_merge.py): raw summarize over results/ is not certified, while the merged n=9 folder is CERTIFIED. These refusals are correct in themselves; the documented procedure is what fails.",
+      "recommendation": "Run summarize.py only on a folder holding n=9 results with the exact target. merge_results.py builds such a folder by filtering on n, cutoff and zub, and records every exclusion in MANIFEST.tsv."
+     },
+     {
+      "id": "S3",
+      "title": "The verdict field is trusted and never re-checked against status and objbound",
+      "severity": "low",
+      "kind": "soundness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 61,
+      "claim": "summarize.py counts a region as covered when verdict == 'PROVED'. It does not re-check that status is INFEASIBLE or CUTOFF, or that objbound <= cutoff. A hand-edited, truncated-then-repaired or buggy result file is accepted.",
+      "evidence": "i1: part 5 with status TIME_LIMIT, objbound 0.03 > cutoff and verdict set to PROVED gives '**CERTIFIED'. heil_tri.py:150-155 writes consistent verdicts, so this only matters as a second line of defence.",
+      "recommendation": "In the merge step, reject any PROVED row where status is not INFEASIBLE or CUTOFF and objbound is None or > cutoff (merge_results.py does this)."
+     },
+     {
+      "id": "E1",
+      "title": "Degenerate splits and prefixes are sound but waste runs or are silently ignored",
+      "severity": "low",
+      "kind": "efficiency",
+      "file": "/home/user/heil/summarize.py",
+      "line": 60,
+      "claim": "summarize.py needs all 2^d sub-parts even when some regions are empty. That happens when the split repeats a prefix triangle, which gives a sub-part with the opposite sign, or when the split contains a T+ triangle. For a repeated prefix triangle, heil_tri.py lets the split override the prefix (lines 74-76), so those extra sub-parts actually solve a region of a sibling part. That is sound but can be as hard as the sibling. heil_tri.py silently ignores triangles that are not in increasing vertex order (only combinations() tuples are looked up, lines 13 and 78), so such a split has no effect while summarize.py still expects all its parts. Sign values true/false in a prefix are never matched. Part indices >= 2^d, which heil_tri.py treats like k mod 2^d, are not counted. Results inside hidden folders are ignored by glob('**').",
+      "evidence": "e1 (all 4 parts PROVED) gives CERTIFIED. e1b (only the 2 parts with the consistent sign) gives not certified. e2 ([0,1,4] in the split) gives CERTIFIED; signs.py shows part 0 and part 1 build identical models. g4: prefix [[3,2,4],1] leaves 75 binaries, the same as unsplit. d4: boolean signs give not certified. j1: part 32 gives not certified. k1: a result in .cache/ gives not certified. Soundness argument: the sign-0 region of (0,1,k) is empty, since A = (x1-x0)*y_k/2 >= 0 from heil_tri.py:35-39,45. A contradictory prefix [[t,0],[t,1]] describes an empty region, so any model run on it is valid.",
+      "recommendation": "Before launching a refinement, check that the split has no triangle already in the prefix, none from T+, and only increasing triples with signs 0/1 (merge_results.canon_tris gives the rule)."
+     },
+     {
+      "id": "O2",
+      "title": "Results record no code or solver version, so mixed heil_tri versions go undetected",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 115,
+      "claim": "A result is dict(vars(args)) plus the solver fields. It has no git commit, no hash of heil_tri.py and no gurobipy version. GitHub jobs run the checked-out commit, and the VM runs the /home/user/heil working tree. If heil_tri.py changes between runs, summarize.py cannot tell and will combine results from different models.",
+      "evidence": "heil_tri.py:115-135 shows the keys written. The template result /home/user/heil/results/cloud/sanity7/result_boundary_0.json has no version key.",
+      "recommendation": "For the audit, record the commit of each source (the results-branch run and git rev-parse on the VM) next to MANIFEST.tsv, and check the 'binaries' field against the expected count for each (prefix, split, part), e.g. 70 for split S5 at n=9."
+     }
+    ],
+    "verified_ok": [
+     "a1/a2/a3/a4: 32 PROVED parts plus a PROVED corners case gives CERTIFIED. One boundary part missing, the corners case missing, or the corners case UNRESOLVED each give 'Not (yet) a complete certificate' (scratchpad/review/tests_out.txt).",
+     "b1/b2/b3: an UNRESOLVED part refined with the printed prefix and a new split, all 16 sub-parts PROVED, gives CERTIFIED. One sub-part missing gives not certified. A two-level refinement (a sub-part refined again with its printed prefix) gives CERTIFIED.",
+     "Duplicates can never produce a false CERTIFIED. The overwrite at summarize.py:58 only picks among existing verdicts for exactly the same region, and any BETTER_CONFIGURATION_FOUND anywhere blocks CERTIFIED (c1, h3, merge R4).",
+     "Prefix order and whitespace are normalised (summarize.py:50,53). A child prefix written in reverse order and compact gives CERTIFIED (d3).",
+     "A child prefix that contradicts the parent (g1), adds an extra constraint (g2), drops one (g3) or uses a permuted vertex order (g4) is never counted as covering the parent: covered() needs the exact sorted key.",
+     "Mixing n or cutoff is refused (f1, f2). Mixed solver/cutmode/timelimit/threads is accepted (f4); this is sound because heil_tri.py:150-155 derives the verdict only from status, objbound and cutoff. The solver-specific cutoff semantics were not examined here.",
+     "The part-bit convention matches: summarize.py:43,63 use (k>>i)&1, as heil_tri.py:76 does. signs.py shows that the model for prefix = printed prefix of part k with split [] equals the model for split S5, part k, for all 32 k.",
+     "A split that repeats a prefix triangle (e1) or contains the T+ triangle [0,1,4] (e2) is sound. The extra sub-parts cover empty regions: A(0,1,k) = (x1-x0)*y_k/2 >= 0 follows from the model constraints, and a contradictory prefix is an empty region.",
+     "An UNRESOLVED run with split '[]' at a node does not break recognition of a complete split at the same node (e3 gives CERTIFIED). A PROVED boundary run with split '[]' covers its whole node (e4).",
+     "The outcome does not depend on set iteration order: PYTHONHASHSEED 0-5 gave identical results for e3, b3 and c2.",
+     "A vertices result with a non-empty prefix is not accepted (h1), and a BETTER_CONFIGURATION_FOUND result blocks CERTIFIED (h3).",
+     "A crashed or killed job leaves no result file, because heil_tri.py only writes JSON at the end (line 156). summarize.py then counts the part as missing, not proved.",
+     "The target float is correct: float('0.027426211734693878') == float(Fraction(43,1568)*(1+1/10^4)), and it exceeds the exact value by 459/8827055269646172160000 (about 5e-20).",
+     "The real n=7 folder /home/user/heil/results/cloud/sanity7 prints CERTIFIED, both as it is and after passing through merge_results.py (9 files copied, 0 rejected).",
+     "Safe merge procedure, tested. Get the n=9 GitHub trees (results/run-*-n9 from the results branch, read-only via git archive or a worktree) and the VM trees (results/cloud/*). Run: python3 scratchpad/review/merge_results.py --n 9 --target 0.027426211734693878 --out <empty dir> <sources...>. It filters n, cutoff and zub == 0.5; rejects vertices results with a split or prefix, PROVED rows that do not match their status/objbound, and non-canonical triangles or signs; groups by (case, sorted prefix, canonical split, part); keeps one PROVED if any exists, else one UNRESOLVED; keeps every BETTER; rewrites only the split text in the copies; writes MANIFEST.tsv with sha256 values; and exits with code 2 on any rejection that needs a person to look. Then run summarize.py on that folder. On the realistic synthetic tree R1 (n=8 validation, n=7 sanity, run-9 with parts 17 and 23 UNRESOLVED, run-10 re-run of part 23 PROVED, VM spot check of part 5 UNRESOLVED, part 17 refined across VM and GitHub with different split spellings, a zub=0.01 probe), raw summarize was not certified both over results/ and over an n=9-only copy. The merged folder gave CERTIFIED. It still gave CERTIFIED with the sources renamed and listed in reverse order (R5). Negative controls stayed not certified: a missing sub-part (R2), a corners case covered only by a split (R3, the split file rejected), and a BETTER result (R4)."
+    ],
+    "depends_on_paper": [
+     "That the boundary normal form (p0, p1 on y=0 with x0 <= x1 and x0+x1 <= 1, p2 on x+y=1, p3 on x=0, the other points sorted by x) and the three-corners-occupied case together cover every configuration whose minimum area exceeds the target. summarize.py's rule 'CERTIFIED iff covered([]) for boundary AND one unsplit vertices case PROVED' (lines 70-76) is only a proof of Delta_9 <= target under this dichotomy (Proposition 1 / Corollary 1 of arXiv:2607.15021).",
+     "That the symmetry reductions x0 <= x1, x0 + x1 <= 1 and x-sorting of the free points (heil_tri.py:39,47) are without loss of generality together with the side placement. The orientation facts themselves can be derived: A(0,1,k) = (x1-x0)*y_k/2 >= 0, A(0,2,3) and A(1,2,3) >= 0 via (1-y2)(1-x) >= 0, and in the vertices case A(0,1,k) >= 0, A(1,2,k) = (1-x_k-y_k)/2 >= 0, A(0,2,k) = -x_k/2 <= 0.",
+     "That the vertices case needs no symmetry breaking or extra case of its own beyond what heil_tri.py models (the corners fixed and n-3 free points sorted by x). This matters for whether one unsplit vertices result is the correct thing for summarize.py to require.",
+     "That a 1e-4 relative margin (2.742e-6 absolute) is the certification standard used for n <= 8 (README claim). This concerns how CERTIFIED is interpreted, not the completeness logic."
+    ]
+   },
+   "verdicts": {
+    "verdicts": [
+     {
+      "id": "S1",
+      "verdict": "confirmed",
+      "corrected_severity": "critical",
+      "reasoning": "Reproduced independently. summarize.py:71 accepts any row with case=='vertices', verdict=='PROVED' and prefix=='[]'. It never looks at split or part. heil_tri.py:74-76 builds `fixed` from --split/--part for every case. My pure-Python transcription of heil_tri.py:13,62-90 (adv_sumcomp/signs2.py, output in signs2_out.txt) gives 65 binaries for the unsplit vertices case. Split [[3,4,5],[3,4,6]] part 2 gives 63 binaries, with (3,4,5)->0 and (3,4,6)->1, so each split vertices part solves only a quarter of the corners region.\n\nadv_sumcomp/t.py, output in t_out.txt:\n- S1_vsplit_one_part: 32 boundary parts PROVED, unsplit vertices run UNRESOLVED, vertices split part 2 PROVED, part 0 UNRESOLVED. Printed 'Corners-occupied case proved: True' and '**CERTIFIED'.\n- S1b_vsplit_only: no unsplit vertices run at all, and one split part (3 of 4) PROVED. Also printed CERTIFIED.\n\nThe shipped runners never pass --split for vertices: heilbronn.yml:89-91, run_parts.sh:18, run_heilbronn_local.ps1:32. So the trigger needs a direct heil_tri.py call. That call is a natural next step, for two reasons. First, summarize.py:39-44 itself tells the user to 're-run with a deeper split' and prints '- case vertices part 0: prefix = []' for an unresolved corners case (seen in S1 and C1 output). Second, no supported way to refine the corners case exists (C1). A false CERTIFIED is reproduced from a realistic operator action, so this is critical under the given scale rather than high."
+     },
+     {
+      "id": "S2",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "Code facts check out:\n- summarize.py:69 compares only cutoff and n across rows.\n- heil_tri.py:48 bounds z to [0, zub].\n- grep finds zub only in heil_tri.py:12, 48, 102 and 114. No runner, workflow or document passes --zub, so the default 0.5 applies.\n\nReproduced: all 33 synthetic results with zub=0.01 print CERTIFIED (t_out.txt, S2_zub).\n\nTwo parts of the claim are overstated:\n1. 'PROVED whatever the geometry' is not exact. heil_tri.py:150 checks recomputed_min_area > tgt BEFORE the PROVED test, so if the solver returns points whose true minimum area exceeds the target, the verdict is BETTER_CONFIGURATION_FOUND. A vacuous PROVED happens only when no such point set is returned. With BestBdStop the solver would likely stop at the root; that is plausible but I did not run it.\n2. 'With zub only slightly above cutoff, solver tolerances make the same thing likely' is unverified. I could not run Gurobi. The model stays valid for any zub > target; the only risk is zub - target within solver tolerance.\n\nThis is a real soundness gap, but it needs a non-default, pointless --zub <= target on a hand run. Medium is fair."
+     },
+     {
+      "id": "C1",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "Confirmed:\n- covered() skips everything except case=='boundary' (summarize.py:48).\n- vert_ok needs the literal prefix '[]' (summarize.py:71).\n- The vertices job has no split/prefix inputs (heilbronn.yml:86-91), and the boundary job hard-codes --case boundary (heilbronn.yml:61).\n- README step 5 says to set run_vertices=false for reruns.\n\nReproduced C1_vprefix (t_out.txt): the unsplit vertices run is UNRESOLVED and 4 PROVED vertices runs cover all sign patterns of [[3,4,5],[3,4,6]] by prefix. Result: 'Corners-occupied case proved: False', not certified, and the output still prints '- case vertices part 0: prefix = []'.\n\nOne correction: 'CERTIFIED cannot be reached except through S1' holds only if no unsplit run of any length finishes. Longer unsplit runs have supported paths: run_parts.sh ... vertices (no time cap on the VM) and run_heilbronn_local.ps1 -Vertices -Hours N. The reviewer's own recommendation says the same. Medium stands. It completely blocks a certificate only if the corners case is too hard for one run, and that is unknown."
+     },
+     {
+      "id": "C2",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "summarize.py:13 sorts file paths. summarize.py:58 builds a dict per part, so the last duplicate wins.\n\nReproduced (t_out.txt):\n- C2a: run-9 part 17 UNRESOLVED plus results/cloud/retry17 part 17 PROVED gives not certified.\n- C2c: run-10 PROVED plus run-9 UNRESOLVED gives not certified.\n- C2b: the same data with the folder named vm_retry17 gives CERTIFIED.\n\nThe printed sort check confirms 'results/cloud/p31long' < 'results/cloud/probe9_p31' < 'results/cloud/retry17' < 'results/run-10-n9' < 'results/run-9-n9' < 'results/vm_retry17'.\n\nprobe9_p31/job.sh does run split S5, part 31, prefix '[]', timelimit 3600, so a real duplicate of the GitHub part 31 will exist. C2d (p31long PROVED, probe9_p31 UNRESOLVED) gives not certified.\n\nThe proposed alternative works. C2e (re-run with the printed prefix and split '[]') gives CERTIFIED. signs2.py confirms that this model is identical to (S5, part k) for all 32 k.\n\nThe effect is conservative only: the winner is always a real verdict for the same region. The certificate outcome did not change across PYTHONHASHSEED 0-3 (X_selfloop). The only set iteration is over split strings at line 56, and each split is evaluated independently."
+     },
+     {
+      "id": "C3",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "Prefixes are normalised with json.loads/sorted/json.dumps (summarize.py:50,53). Splits are compared as raw strings (summarize.py:56,58). heil_tri.py:115 stores a.split verbatim.\n\nReproduced (t_out.txt):\n- C3a: a VM re-run of part 17 PROVED with a spaced split, next to GitHub part 17 UNRESOLVED, gives not certified.\n- C3b: parts 0-15 compact and 16-31 spaced, all PROVED, gives not certified ('Boundary case fully covered: False').\n\nThis fails closed and can be fixed afterwards by canonicalising copies, so no compute is lost if someone notices. It is plausible under CLOUD_SESSION_PROMPT.md step 5, where one refinement's sub-parts are launched in two places. Medium (low would also be defensible)."
+     },
+     {
+      "id": "O1",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Confirmed:\n- heilbronn.yml:125 saves every run, n=8 included, under results/run-<k>-n<n> on the same branch.\n- heilbronn.yml:141 accumulates them.\n- README:56 says to run summarize.py over 'results'.\n- summarize.py:13 globs recursively.\n\nReproduced O1_with_n8 (t_out.txt): a complete n=9 set plus 16 n=8 results gives 'All results use the same n and target: False', not certified. float('0.0274262117346939') == 0.027426211734693878 is False (t_out.txt), so a 16-digit spelling of the target is also refused.\n\nThe documented step can never succeed, but it fails closed. It explains itself in the printed 'same n and target: False' line and costs no compute. The fix (point summarize.py at an n=9-only folder) is trivial. I lower it to low."
+     },
+     {
+      "id": "S3",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "summarize.py:61 and :71 test only verdict=='PROVED'. Reproduced S3_verdict (t_out.txt): part 5 with status TIME_LIMIT, objbound 0.03 > cutoff and verdict PROVED gives CERTIFIED.\n\nheil_tri.py:150-155 always writes a verdict consistent with status and objbound. This only matters as defence in depth against edited or corrupted files. Low."
+     },
+     {
+      "id": "E1",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Every sub-claim reproduced.\n\nsigns2.py (output in signs2_out.txt):\n- Part k and part k+32 build identical models.\n- In split [[0,1,4],[0,3,4]], parts 0 and 1 build identical models: the T+ triangle is ignored because the tplus test runs first (heil_tri.py:80).\n- Prefix [[3,2,4],1] leaves 75 binaries, the same as unsplit: a non-increasing triple is never looked up (line 78 iterates combinations).\n- A split that repeats a prefix triangle overrides it: part 0 sets (2,3,4)=0 although the prefix said 1.\n- A(0,1,k) == (x1-x0)*y_k/2 >= 0 held exactly on 2000 random rational samples. The formula at heil_tri.py:61 is the standard signed area, so the sign-0 region of (0,1,k) is empty.\n\nt_out.txt:\n- Part 63 is not counted (E1_part32).\n- A result under .cache/ is ignored (E1_hidden).\n- Boolean signs are not matched (E1_bool).\n\nSoundness argument: heil_tri's model for (Q, S, k) is always a superset of the order-independent sign region of Q + S_k. The last-wins dict at lines 74-76 differs only for contradictory lists, and those are empty regions. So these cases waste compute or are ignored but cannot produce a false CERTIFIED. Low."
+     },
+     {
+      "id": "O2",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "heil_tri.py:115 writes res = dict(vars(a)) plus binaries, and lines 120-135 add the solver fields. There is no commit, source hash or gurobipy version. /home/user/heil/results/cloud/sanity7/result_boundary_0.json and result_vertices_0.json have only those keys.\n\nsigns2.py confirms the suggested consistency check: split S5 at n=9 always gives binaries=70, unsplit boundary gives 75 and unsplit vertices gives 65. This is a provenance gap with no current evidence of mixed versions. Low (borderline info)."
+     }
+    ],
+    "verified_ok_disputes": [
+     "Item 15 (the safe merge procedure) says merge_results.py 'keeps every BETTER'. That is false for a BETTER_CONFIGURATION_FOUND row that fails any other filter:\n- vertices result with a split or prefix\n- zub != 0.5\n- non-canonical prefix/split\n- cutoff mismatch\n- part out of range\nmerge_results.py:59-78 rejects such a row before the BETTER handling at lines 85-87, so it is not copied. Its rejection reason never mentions the BETTER verdict.\n\nReproduced in scratchpad/review/adv_sumcomp/mtest.py (output in mtest_out.txt), each case being a complete PROVED set plus one BETTER:\n- M1: BETTER in a split vertices run\n- M2: BETTER with zub=0.3\n- M3: BETTER with prefix [[[3,2,4],1]]\nIn all three, raw summarize over the sources is NOT certified, because the BETTER blocks it. merge exits with code 2 and a reason unrelated to the BETTER. summarize.py over the merged folder then prints **CERTIFIED. Control M4 (plain BETTER) stays not certified.\n\nSo the merge step removes the 'any BETTER blocks CERTIFIED' cross-check. The procedure is safe only if a person treats exit code 2 as 'do not use this folder for a certificate'.\n\nFix: merge should always copy, or at least loudly flag as BETTER, every same-n BETTER row whatever the other filters say. The procedure text should also state that a merged folder from an exit-2 merge must not be used for a CERTIFIED claim.",
+     "Minor precision on item 6 ('heil_tri.py:150-155 derives the verdict only from status, objbound and cutoff'). The verdict also depends on recomputed_min_area: a BETTER result from line 150 takes precedence over PROVED. This does not affect the soundness conclusion. It is also why S2's 'PROVED whatever the geometry' is overstated, since a vacuous-zub run whose returned points exceed the target is labelled BETTER, not PROVED."
+    ]
+   }
+  },
+  {
+   "dim": "workflow-plumbing",
+   "review": {
+    "findings": [
+     {
+      "id": "F1",
+      "title": "summarize.py accepts a split sub-part of the corners case as the whole corners case",
+      "severity": "medium",
+      "kind": "soundness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 71,
+      "claim": "vert_ok only checks case=='vertices', verdict=='PROVED' and prefix=='[]'. It never checks r['split']. heil_tri.py applies --split/--part to the vertices case too (heil_tri.py:74-76, used for any case). So a result from `heil_tri.py --case vertices --split '[[3,4,5]]' --part 0` covers only half of the corners case, and summarize would still count it as the whole case and print CERTIFIED. summarize itself points operators toward this: for an UNRESOLVED vertices row it prints 'Re-run each with a deeper split ... - case vertices part 0: prefix = []'.",
+      "evidence": "Synthetic test (scratchpad/review/sum/mk.py case D): 32 PROVED boundary parts plus one vertices row with split '[[3,4,5]]', part 0, PROVED, and part 1 never run. summarize.py printed 'Corners-occupied case proved: True' and '**CERTIFIED ...**'. Test I: an UNRESOLVED vertices row makes summarize print 'Unresolved parts. Re-run each with a deeper split ... - case vertices part 0: prefix = []'. The workflow (heilbronn.yml:89-91) and run_parts.sh:18 never pass --split for vertices, so the documented flow cannot reach this. Only a manual refinement of the corners case can, and that is the natural next step when the corners case is UNRESOLVED (see F3).",
+      "recommendation": "Set vert_ok only when json.loads(r['split']) == [] and json.loads(r['prefix']) == []. Better: generalise covered() to take the case as part of the key, so a split corners case needs all 2^d leaves PROVED. Until then, make summarize reject vertices rows with a non-empty split."
+     },
+     {
+      "id": "F2",
+      "title": "summarize.py does not check zub or cutmode, so a manual run with a small --zub is accepted as PROVED",
+      "severity": "low",
+      "kind": "soundness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 69,
+      "claim": "The only consistency check across rows is n and cutoff (tgt_ok). A run with --zub below the target (z <= zub < target) trivially gets objbound <= target, so heil_tri marks it PROVED, and summarize accepts it. Neither the workflow nor run_parts.sh passes --zub (default 0.5), so only a manual run can trigger this.",
+      "evidence": "Synthetic test G: part 3 carrying zub=0.02 with verdict PROVED gave '**CERTIFIED ...**'. The zub bound is at heil_tri.py:48 `z = cont(0, zub, 'z')`. summarize.py:69 only compares cutoff and n.",
+      "recommendation": "In summarize, require zub >= 0.5 (or zub > cutoff), cutmode in {'bdstop','param','constraint'}, and the same solver for every row. Reject or flag any row that fails."
+     },
+     {
+      "id": "F3",
+      "title": "The corners-occupied case has no refinement path, and summarize's advice for it leads nowhere",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/.github/workflows/heilbronn.yml",
+      "line": 89,
+      "claim": "The vertices job runs the whole corners case unsplit. It ignores the split and prefix inputs, and so does run_parts.sh:18. covered() only walks boundary rows (summarize.py:47-49), and vert_ok needs a single PROVED row. If the n=9 corners case does not finish within 5.5 h on GitHub, a certificate needs a longer single run on the 4-core VM, which keeps its own session-lifetime risk. summarize's printed advice (split it with prefix []) would make the workflow re-run boundary jobs at the root plus the same unsplit vertices job, which achieves nothing.",
+      "evidence": "heilbronn.yml:89-91 (no --split/--prefix); run_parts.sh:18 (same); summarize.py:47-49 (`if r['case'] != 'boundary': continue`), :71; test I output quoted in F1. Whether the n=9 corners case finishes in 5.5 h is unverified. For scale, boundary part 31 still had a 157% gap after 1350 s (results/cloud/probe9_p31/log_31.txt).",
+      "recommendation": "Support split and prefix for the vertices case end to end: workflow inputs, run_parts.sh, and a covered() tree keyed by case, fixed together with F1. Alternatively, document that the corners case must be run on the VM with larger hours, and change the summarize message for vertices rows."
+     },
+     {
+      "id": "F4",
+      "title": "Gurobi node memory grows about 1 KB per open node; a 5.5 h part extrapolates to about 14 GB (OOM risk on 16 GB runners and on this VM)",
+      "severity": "medium",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 17,
+      "claim": "No NodefileStart, SoftMemLimit or MemLimit is set. The open-node count grows roughly linearly, so by the 19800 s limit the solver process should be near the 16 GB RAM of a public ubuntu-latest runner and of this VM, which has no swap. Private 2-core runners have about 7 GB (unverified). An OOM kill loses the whole job: no JSON, no objbound, and no UNRESOLVED record, so summarize prints no refinement prefix for that part (see F9). This is fail-safe for soundness but can waste an entire 11 h run.",
+      "evidence": "Read-only ps of the running probe (pid 896, part 31, 4 threads): RSS 871,768 KB at etimes 1150 s with 892,735 open nodes, and RSS 1,014,988 KB at 1351 s with 1,038,409 open nodes. The marginal cost is about 0.99 KB per open node. From the log, recent open-node growth is 737/s, which extrapolates to 14.6M open nodes at 19800 s, or about 14-15 GB. `free -m` shows 16095 MB total and Swap 0. This extrapolation is from one part only; other parts may differ.",
+      "recommendation": "Set Gurobi resource parameters, which leave the mathematics unchanged: NodefileStart (e.g. 1-2 GB) so nodes spill to disk, and SoftMemLimit (e.g. 12 GB) so Gurobi stops gracefully and heil_tri still writes a JSON. Also record ObjBound for status 17 (MEM_LIMIT) and 11 (INTERRUPTED) so that UNRESOLVED rows carry their bound."
+     },
+     {
+      "id": "F5",
+      "title": "The documented cross-run aggregation cannot print CERTIFIED: the results branch mixes n=8 and n=9, and summarize takes a single folder",
+      "severity": "medium",
+      "kind": "completeness",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 56,
+      "claim": "README step 6 and CLOUD_SESSION_PROMPT step 5 say to run `python summarize.py results` over the whole results branch, combined with the VM results. That branch will also hold the n=8 validation run, and the VM's results/ tree holds results/cloud/sanity7 (n=7). summarize has no n or target filter, and tgt_ok then prints 'All results use the same n and target: False'. It also reads only sys.argv[1], so the operator has to copy the n=9 folders by hand into a new directory.",
+      "evidence": "Synthetic test B: run-3-n8 (complete) plus run-7-n9 (complete) in one folder gave 'All results use the same n and target: False' and 'Not (yet) a complete certificate'. run-7-n9 alone gave CERTIFIED. summarize.py:11 reads a single folder, :69 is tgt_ok. After `git checkout results` on the VM, untracked results/cloud/* sits beside results/run-*.",
+      "recommendation": "Add --n/--target filters that skip non-matching rows with a warning, and accept several folders or globs. Alternatively, have the save step write to results/n<n>/run-<k>/ and document `summarize.py results/n9 results/cloud/<n9 labels>`."
+     },
+     {
+      "id": "F6",
+      "title": "The save-to-branch step reports success when every push failed, and on a first-ever run it aborts without retrying after a transient push failure",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/.github/workflows/heilbronn.yml",
+      "line": 132,
+      "claim": "After 5 failed pushes the loop ends with `sleep`, which returns 0, so the step is green and nothing reaches the 'results' branch. The coordinator, which reads only that branch, sees no results. If the first-ever push fails, iteration 2 again takes the orphan path, and `git checkout -f --orphan results` fails because the local branch already exists; set -e aborts the step with exit 128. In both cases the data survives in the 'summary' artifact, which is uploaded earlier (lines 116-121).",
+      "evidence": "Local simulation (scratchpad/review/git/sim.sh: shallow main checkout, download-artifact layout, then the step body verbatim with sleep shortened). S3, a pre-receive hook rejecting every push: 5 rejections, 'step exit code: 0', and the run-8 folder absent from the branch. S4, a first-ever run whose first push fails: 'fatal: a branch named 'results' already exists', 'step exit code: 128'. Also verified OK: S1/S2 create and append run folders, and S5 (two concurrent runs) keeps both folders with no overwrite.",
+      "recommendation": "Set ok=1 on a successful push and `exit 1` after the loop if it never succeeded. In the orphan branch path use `git checkout -f -B results` after `git checkout --orphan tmp`, or delete the local results branch first."
+     },
+     {
+      "id": "F7",
+      "title": "Duplicate results for the same (prefix, split, part): the last file in path order wins, so a PROVED can be shadowed by a later UNRESOLVED",
+      "severity": "low",
+      "kind": "completeness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 58,
+      "claim": "`rs = {r['part']: r ...}` keeps whichever duplicate comes last in sorted path order. The same part run twice (for example PROVED on GitHub and UNRESOLVED on a shorter VM spot check, or the reverse order) can hide a valid PROVED leaf. This fails safe: BETTER rows still block certification through `better`.",
+      "evidence": "Synthetic test C: part 5 PROVED in run-7 and UNRESOLVED in run-9 gave 'Boundary case fully covered by proved parts: False'.",
+      "recommendation": "Treat a leaf as proved if any row for it is PROVED, while continuing to block on any BETTER_CONFIGURATION_FOUND. Report conflicting duplicates."
+     },
+     {
+      "id": "F8",
+      "title": "Split lists are compared as raw strings, so the same split typed with different whitespace does not combine",
+      "severity": "low",
+      "kind": "completeness",
+      "file": "/home/user/heil/summarize.py",
+      "line": 56,
+      "claim": "Prefixes are canonicalised through json.dumps(sorted(...)), but splits are grouped by the raw r['split'] string. Parts of one split run from GitHub and from the VM or laptop with '[[2,3,4],...]' and '[[2, 3, 4], ...]' are treated as two different incomplete splits.",
+      "evidence": "Synthetic test E: parts 0-15 with the split typed without spaces and 16-31 with spaces gave 'Boundary case fully covered by proved parts: False'.",
+      "recommendation": "Group by json.dumps(json.loads(r['split'])). Keep triangle order, because it defines the part numbering."
+     },
+     {
+      "id": "F9",
+      "title": "summarize does not list missing parts (killed, OOM or cancelled jobs)",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/summarize.py",
+      "line": 73,
+      "claim": "Only UNRESOLVED rows get a printed prefix. A part with no JSON appears only as 'Boundary case fully covered: False', so after an 11 h run the operator must work out by hand which parts to re-run.",
+      "evidence": "Synthetic test: deleting result-boundary-12 from a complete run left the table with rows 11 and 13, the line 'Boundary case fully covered by proved parts: False', and no mention of part 12.",
+      "recommendation": "In covered(), collect the uncovered leaves (prefix, split, part) and print them as 'missing' with ready-to-paste inputs."
+     },
+     {
+      "id": "F10",
+      "title": "`python heil_tri.py ... | tee` under GitHub's default `bash -e` (no pipefail) hides solver crashes",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/.github/workflows/heilbronn.yml",
+      "line": 61,
+      "claim": "With no shell specified, GitHub runs `bash -e {0}` (from GitHub docs, not verifiable offline). The pipeline's exit status is tee's, so a licence error, Python exception or OOM kill still gives a green job. This is fail-safe, because the JSON is missing, but the Actions UI then misreports failed parts as successful.",
+      "evidence": "Local test (scratchpad/review/teestep.sh): `python3 -c 'sys.exit(1)' | tee` exits 0 under `bash -e` and 1 under `bash -eo pipefail`. Same pattern at heilbronn.yml:89-91.",
+      "recommendation": "Add `shell: bash` (which implies -eo pipefail) or `set -o pipefail` to both solve steps."
+     },
+     {
+      "id": "F11",
+      "title": "run_parts.sh: reusing a label leaves a stale DONE and overwrites results; labels with spaces fail silently",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/run_parts.sh",
+      "line": 20,
+      "claim": "(a) DONE is never removed at start, so a reused label shows DONE while the new job is still running. (b) Output names are result_boundary_<p>.json with no prefix or split in them, so two refinements under one label overwrite each other. Each JSON describes its own run, so this loses data but is not unsound. (c) `cat > job.sh` rewrites a script that an earlier job with the same label may still be executing. Bash reads scripts incrementally; this was not reproduced. (d) $out is unquoted in job.sh, so a label containing a space sends everything to a file results/cloud/my, with no results and no DONE in the label folder.",
+      "evidence": "Stub simulation (scratchpad/review/rp, a stub heil_tri.py and stub gurobipy): after re-running label t1, 'DONE exists while new job still running: True'. With label 'my run', results/cloud/my contains 'ALL_DONE run/DONE' and the folder 'my run' holds only job.sh.",
+      "recommendation": "Refuse an existing label directory, or `rm -f $out/DONE` at start. Validate that the label matches [A-Za-z0-9_-]+ and quote paths in the heredoc. Consider putting a short hash of split+prefix into result filenames."
+     },
+     {
+      "id": "F12",
+      "title": "Concurrent run_parts.sh invocations oversubscribe the CPU with a wall-clock TimeLimit",
+      "severity": "low",
+      "kind": "efficiency",
+      "file": "/home/user/heil/run_parts.sh",
+      "line": 18,
+      "claim": "Every job uses --threads $(nproc) (4 here) and nothing serialises them. Two concurrent run_parts.sh invocations, or one started while the current timing probe runs, put 8 threads on 4 cores. Gurobi's TimeLimit counts wall-clock time, so each part gets about half the CPU in the same time budget. Verdicts stay valid, but more parts end UNRESOLVED and the timing calibration is corrupted.",
+      "evidence": "Generated job.sh (results/cloud/probe9_p31/job.sh) contains `--threads $(nproc)`. The TimeLimit is wall-clock: ps shows etimes 1150 s at 385% CPU while the Gurobi log shows 1150s, not about 4400 s.",
+      "recommendation": "Wrap job.sh in `flock /tmp/heil_run.lock` so parts queue, or let the caller pass a thread count."
+     },
+     {
+      "id": "F13",
+      "title": "Timeline: two waves, about 11 h, and the results branch stays empty until the whole run ends",
+      "severity": "info",
+      "kind": "operational",
+      "file": "/home/user/heil/.github/workflows/heilbronn.yml",
+      "line": 101,
+      "claim": "33 jobs (32 boundary plus vertices) against the Free-plan limit of 20 concurrent jobs run in 2 waves (max-parallel 20 plus vertices is 21 requested). If parts use the full 5.5 h, which the probe's 157% gap at 1350 s suggests, the run takes about 2 \u00d7 (5.5 h + ~1-2 min setup) \u2248 11.1 h and 181.5 runner-hours. The summary job (`needs: [boundary, vertices]`, `if: always()`) is the only writer to 'results', so the branch shows nothing until every job has finished. CLOUD_SESSION_PROMPT step 4 ('when any n = 9 parts finish ... re-run two parts') can only be followed through per-job artifacts (UI or gh), not through the branch. Each UNRESOLVED part then needs its own workflow run with one prefix per run, so 32 unresolved parts refined 16 ways would be 512 jobs, or about 26 waves (about 140 h).",
+      "evidence": "heilbronn.yml:44-48, 100-102, 122-146; probe log at 1350 s: BestBd 0.0606 against target 0.0274.",
+      "recommendation": "If intermediate visibility matters, have each boundary job push its own JSON to the branch using the same retry loop, or have the coordinator use `gh run download`. Plan refinement capacity with the wave arithmetic above."
+     },
+     {
+      "id": "F14",
+      "title": "Input footguns: n=8 defaults, run_vertices=true on refinements, unvalidated hours",
+      "severity": "low",
+      "kind": "efficiency",
+      "file": "/home/user/heil/.github/workflows/heilbronn.yml",
+      "line": 23,
+      "claim": "(a) run_vertices defaults to true, so every refinement run re-runs the unsplit 5.5 h vertices job unless the user remembers to switch it off, taking one of the 20 slots. (b) hours is not checked. hours >= 5.97 gives TimeLimit > 21480 s = timeout-minutes 358, so the job is cancelled: the result is either missing or status 11 marked UNRESOLVED, both safe but wasted. (c) If n=9 is chosen while the n=8 target is left, the result certifies the weaker bound 0.0339, which is true and printed in the CERTIFIED line but is not the intended claim. If the 5-triangle split is chosen with the default parts 0..15, half the parts never run.",
+      "evidence": "heilbronn.yml:10-29; 5.5 h gives 19800 s against 358 min = 21480 s (1680 s headroom). The n=9 model build is negligible (165 rows, 135 columns per the probe log).",
+      "recommendation": "Add a first validation step that fails when hours > 5.8, when n=9 is combined with the n=8 target, or when parts does not equal range(2^len(split)) (or print a warning). Consider defaulting run_vertices to false when prefix != '[]'."
+     },
+     {
+      "id": "F15",
+      "title": "Documentation contradicts the repository and the code",
+      "severity": "low",
+      "kind": "cosmetic",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 42,
+      "claim": "(a) README:42-44 describe `workflow_heilbronn.yml` and `push_to_github.ps1`, but neither file exists in the repo or its git history; the workflow is at .github/workflows/heilbronn.yml. (b) README:32 says a job that runs out of time is UNRESOLVED, but heil_tri.py:152 marks TIME_LIMIT with objbound <= target as PROVED (harmless). (c) The heil_tri.py docstring (lines 7-8) says 'add z >= cutoff and prove INFEASIBLE' and names `--split-tris`, but the default cutmode is bdstop (line 103) and the flag is `--split`. (d) README:40 says 'one full wave of 33 jobs', but at 20 concurrency 33 jobs make 2 waves; the cost arithmetic 33\u00d7330 min\u00d7$0.006-0.012 = $65-131 is correct. (e) '42 s of solver time on 2 cores' for n=7 cannot be checked here; this VM measured 30.8 s total on 4 cores for the same 9 jobs, which is consistent in magnitude.",
+      "evidence": "`ls` and `git log --all --name-only` show no push_to_github or workflow_heilbronn. The sum of sanity7 runtimes is 30.84 s.",
+      "recommendation": "Update README steps 2 and 6 and the heil_tri docstring."
+     },
+     {
+      "id": "F16",
+      "title": "Result files carry no code or solver provenance",
+      "severity": "low",
+      "kind": "operational",
+      "file": "/home/user/heil/heil_tri.py",
+      "line": 115,
+      "claim": "The result JSON records vars(args) and solver outputs but not the git commit SHA of heil_tri.py or the gurobipy version. The pip pin '>=13,<14' allows different 13.x releases between runs, and run_parts.sh:13 accepts any importable gurobipy. Cross-run aggregation (F5) merges files from different commits and solver versions with no way for summarize to tell them apart. The solver version only appears in the logs.",
+      "evidence": "heil_tri.py:115 `res = dict(vars(a))`. The probe log shows 'Gurobi Optimizer version 13.0.3', but the JSON schema (sanity7/result_boundary_0.json) has no version field.",
+      "recommendation": "Add res['code_sha'] (GITHUB_SHA or `git rev-parse HEAD`), res['gurobi_version'] (gp.gurobi.version()) and the hostname or runner to every JSON, and have summarize print the distinct values."
+     },
+     {
+      "id": "F17",
+      "title": "GitHub Actions terms may not cover using Actions as general compute (unverified)",
+      "severity": "info",
+      "kind": "operational",
+      "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+      "line": 10,
+      "claim": "README:10 describes Actions as 'just rented compute'. From memory, GitHub's Additional Product Terms for Actions exclude activity unrelated to building, testing, deploying or publishing the repository's software. Running about 180 runner-hours of optimisation per n=9 run could be flagged. This could not be checked here because the network is restricted.",
+      "evidence": "From memory only; unverified in this session.",
+      "recommendation": "Check the current GitHub Actions terms before the n=9 run, or budget for the VM or academic-licence fallback."
+     }
+    ],
+    "verified_ok": [
+     "Workflow JSON inputs: split and prefix are substituted inside single quotes (heilbronn.yml:62). JSON never contains single quotes, and json.dumps output with spaces passes through as one argument. Synthetic test H: a refinement run whose prefix was pasted from summarize ('[[[2, 3, 4], 1], ...]') combined with the parent run, and summarize printed CERTIFIED, because prefixes are canonicalised with json.dumps(sorted(...)) (summarize.py:50).",
+     "run_parts.sh unquoted heredoc: the values of $split and $prefix are not re-expanded when the heredoc is generated, and they land inside single quotes in job.sh. A stub run with prefix '[[[2, 3, 4], 0], [\"$HOME `id -u` $(echo PWN)\", 1]]' reached heil_tri argv literally. Only \\$p and \\$(nproc) are deferred, as intended.",
+     "Time headroom: hours=5.5 gives int(5.5*3600)=19800 s against timeout-minutes 358 = 21480 s, leaving 1680 s for checkout, setup-python, pip and the JSON write. Model build is negligible (n=9: 165 rows, 135 columns). TimeLimit is wall-clock (ps etimes matches the log time).",
+     "Killed or cancelled jobs are safe: the JSON is written only after optimize() returns (heil_tri.py:156), and an interrupted Gurobi run (status 11) gets objbound None and so UNRESOLVED. The upload step has if: always(), and with a missing JSON only the log is uploaded (if-no-files-found defaults to warn). summarize then treats the part as not covered; test: deleting part 12 gave 'fully covered: False'.",
+     "The download-artifact@v4 layout results/result-boundary-K/result_boundary_K.json is found by summarize's recursive glob. Synthetic test A (32 parts plus vertices) printed CERTIFIED.",
+     "Save-to-branch in local simulation (bare origin, shallow main checkout): the first-ever run creates an orphan 'results' branch and later runs append results/run-<N>-n<n>/. Solver logs are committed even though main's .gitignore has *.log, because the switch removes .gitignore. Two simultaneous runs: one push was rejected ('cannot lock ref'), the retry re-based onto origin/results, and both folders survived. There is no force-push, so another run's history cannot be overwritten. Folders collide only for the same run_number, i.e. a re-run of the same run, which overlays files.",
+     "run_vertices=false: vertices is skipped, and summary still runs because of `if: ${{ always() }}` (GitHub status-function semantics). The per-run summary says 'Not (yet) a complete certificate', which is correct, and the cross-run summary works (test H). `inputs.run_vertices` is a real boolean in the inputs context, unlike github.event.inputs.",
+     "The workflow has 9 workflow_dispatch inputs (at most 10 allowed), and fail-fast is false, so one failing part does not cancel the others. The YAML parses (checked with yaml.safe_load).",
+     "The n=9 boundary model fits the pip restricted licence: the probe log shows 'Restricted license - for non-production use only' with 135 columns, 165 rows, 50 bilinear constraints and 70 binaries, and it is running.",
+     "run_parts.sh: set -e applies only to the launcher (pip chain, secs computation), not to the background job.sh. A failing part therefore does not stop later parts, and DONE is written regardless (DONE means attempted, not proved). The pip chain (import check, then pip, then pip --break-system-packages) aborts under set -e only if all three fail.",
+     "The n=7 sanity folder re-summarised to CERTIFIED. The 9 jobs took 30.8 s total on 4 cores, and the statuses were OPTIMAL or BOUND_REACHED with objbound <= target."
+    ],
+    "depends_on_paper": [
+     "That the boundary case, with p0,p1 on y=0, x0<=x1, x0+x1<=1, p2 on x+y=1, p3 on x=0 and the fixed positive orientations of the triangles among p0..p3 and (0,1,k), together with the single corners-occupied case, covers every n-point configuration up to symmetry (Proposition 1 / Corollary 1). summarize.py's completeness test (the boundary split tree plus one PROVED vertices row) is a certificate only if this holds.",
+     "That the corners-occupied case needs no other normalisation than sorting free points by x and is one case, so a single unsplit vertices job suffices.",
+     "That the n=8 validation target 0.03389799608776131 equals Delta_8*(1+1e-4), so the validation run checks a known result, and that the n<=8 certificates used the same 1e-4 relative standard (README:23, 76).",
+     "The timing figures quoted in README:81 (n=7 22.6 s, n=8 2324 s) used for planning."
+    ]
+   },
+   "verdicts": {
+    "verdicts": [
+     {
+      "id": "F1",
+      "verdict": "confirmed",
+      "corrected_severity": "critical",
+      "reasoning": "Reproduced independently (review/v2/syn.py). summarize.py:71 checks only case, verdict and the raw string prefix=='[]'. It never looks at r['split']. heil_tri.py:74-76 builds `fixed` for every case, so --split applies to the vertices case as well; only tplus/tminus (lines 80-81) take precedence, and (3,4,5) is in neither. Test F1a: 32 PROVED boundary parts plus one vertices row with split [[3,4,5]], part 0, PROVED printed '**CERTIFIED**'. Test F1b is stronger: vertices part 0 PROVED and part 1 UNRESOLVED. summarize listed '- case vertices part 1: prefix = [[[3, 4, 5], 1]]' as unresolved and still printed CERTIFIED, because vert_ok uses any(). Test F1d: an UNRESOLVED vertices row makes summarize advise 'Re-run each with a deeper split ... case vertices part 0: prefix = []'. A non-empty vertices prefix is correctly rejected (F1c). Severity: this is a real path to a false CERTIFIED. It needs no nonsensical parameter, only documented heil_tri flags (--split/--part) used for the refinement that summarize itself recommends. That refinement is the natural next step if the corners case is UNRESOLVED (see F3), and a split typically leaves some leaves unresolved, which is exactly the case summarize wrongly accepts. By the rubric (critical = could make a false CERTIFIED) this is critical. The only precondition is that the workflow, run_parts.sh and run_heilbronn_local.ps1 never pass --split for vertices, so a manual heil_tri.py invocation is required. The recommended fix (json.loads(split)==[] and json.loads(prefix)==[], or a case-keyed covered() tree) is correct."
+     },
+     {
+      "id": "F2",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "summarize.py:69 compares only the cutoff and n sets. zub is recorded in every JSON (the sanity7 keys include 'zub') but never checked. heil_tri.py:48 bounds z by zub, so zub <= cutoff forces ObjBound <= cutoff and verdict PROVED at heil_tri.py:152. Synthetic test F2_zub_small (a row with zub=0.02 and PROVED) printed CERTIFIED. The unsound condition is exactly zub <= cutoff; zub > cutoff is sound, because min(true max, zub) > cutoff whenever the true max > cutoff. This is a soundness hole, but the trigger is a parameter that is wrong on its face and that no document, tool or summarize message suggests (workflow, run_parts.sh and ps1 never pass --zub). That is why I keep it low rather than rating it with F1. Two minor corrections to the recommendation: a cutmode check is redundant because argparse (heil_tri.py:103) already restricts it to the three modes, all of which yield sound verdicts, and mixed solvers are not a soundness issue. The essential check is zub > cutoff."
+     },
+     {
+      "id": "F3",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "Checked in the code. heilbronn.yml:89-91 and run_parts.sh:18 pass no --split/--prefix for vertices. covered() skips non-boundary rows (summarize.py:47-49), and vert_ok needs one PROVED row. summarize's advice for an UNRESOLVED vertices row is 'prefix = []' (test F1d). Following it in the workflow re-runs boundary parts at the root under a new split plus the same unsplit vertices job. A manual split is possible via heil_tri.py, but summarize cannot combine the leaves soundly (F1). Mitigation the reviewer missed: run_heilbronn_local.ps1 supports -Vertices with Hours=10 by default on a 24-core laptop (lines 12-13, 31-32), so a longer single corners run has a second venue besides the VM. Difficulty evidence: at n=7 the corners case took 1.41 s against 2.0-10.0 s for boundary parts (sanity7 JSONs), i.e. it is comparable to one part. The n=9 probe part 31 is still at a 133% gap after 2600 s. Whether the n=9 corners case finishes in 5.5 h is unverified. Medium is appropriate."
+     },
+     {
+      "id": "F4",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "heil_tri.py:17-20 sets no NodefileStart, SoftMemLimit or MemLimit. Re-measured read-only: pid 896 RSS 1,590,884 KB at etimes 2275 s against 1,653,228 open nodes (log 2275s), and 1,788,824 KB at 2602 s against 1,863,173 open nodes (log 2600s). That is about 0.94-0.96 KB per open node, matching the reviewer. Open-node growth is slowing (728/s over 1150-1350 s, 646/s over 2275-2600 s), so my extrapolation to 19800 s is about 13M nodes, or 12.5-13 GB, a bit below the reviewer's 14-15 GB. Machine: 16095 MB total, no swap. The risk is real but not certain. The JSON is written only after optimize() returns (heil_tri.py:156), so an OOM kill leaves no JSON (fail-safe). Nuance the reviewer missed: an untracked /home/user/heil/gurobi.env containing 'NodefileStart 6' was created at 17:43:08, after the probe started at 17:16:18; the probe log has no NodefileStart line. Future VM runs launched through run_parts.sh (which cds to the repo dir) should pick it up, since Gurobi reads gurobi.env from the cwd; that is from Gurobi documentation and unverified here without running Gurobi. The file is untracked (git status '?? gurobi.env'), so GitHub runners do not get it, and SoftMemLimit is set nowhere. GitHub runner RAM and swap figures are unverified offline."
+     },
+     {
+      "id": "F5",
+      "verdict": "confirmed",
+      "corrected_severity": "medium",
+      "reasoning": "Reproduced (syn.py F5): n=8 and n=9 runs in one folder printed 'All results use the same n and target: False' and 'Not (yet) a complete certificate'; the n=9 run alone printed CERTIFIED. summarize.py:11 takes a single folder and :69 has no n/target filter. It fails safe. There is also a further problem in the documented flow (README:56 'Check out that branch ... run python summarize.py results'), which I reproduced with git 2.43 in review/v2/git/vm. (1) With an untracked results/ directory present, as on this VM (results/cloud), `git checkout results` fails: 'fatal: 'results' could be both a local file and a tracking branch'. (2) `git switch results` works, but the results branch is an orphan containing only results/ (save step heilbronn.yml:137-138 `git rm -rf .`). The working tree therefore loses heil_tri.py, summarize.py and run_parts.sh, and results/cloud/* sits beside results/run-*. Doing this in /home/user/heil while run_parts.sh parts are queued would make later parts fail (job.sh calls `python3 heil_tri.py` relative to the cwd) while DONE is still written. None of this is unsound, but the documented aggregation step is broken in several ways, so medium stands."
+     },
+     {
+      "id": "F6",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Reproduced (review/v2/git/step.sh, a verbatim step body with sleep 0, against a bare origin with an actions/checkout-like shallow init). S3, with a pre-receive hook rejecting every push: 5 rejections, step exit 0 (the for loop's status is that of the last `sleep`), and the branch unchanged. S4, a first-ever run with one transient rejection: 'fatal: a branch named 'results' already exists', step exit 128. S1 confirmed normal creation, and solver_0.log was committed despite main's *.log .gitignore. The data survives in the 'summary' artifact (heilbronn.yml:116-121, uploaded before this step). Operational only; low."
+     },
+     {
+      "id": "F7",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "summarize.py:58 builds a dict keyed by part, iterating groups in sorted-file-path order, so the last duplicate wins. Test F7 (PROVED in run-7, UNRESOLVED in run-9): 'fully covered: False'. Test F7b (reverse order): CERTIFIED, though part 5 is still listed under 'Unresolved parts' (cosmetic). BETTER rows are collected separately at :30 and block certification, so this fails safe."
+     },
+     {
+      "id": "F8",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "summarize.py:56-58 group by the raw r['split'] string, while prefixes are canonicalised at :50/:53. Test F8 (parts 0-15 with a compact split, 16-31 with a spaced split): 'fully covered: False'. Fails safe; realistic only if someone types spaces, since all documented split strings are compact."
+     },
+     {
+      "id": "F9",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Test F9_missing_part12: 'Verdict counts: {PROVED: 32}' and 'Boundary case fully covered by proved parts: False', with no mention of part 12. Only UNRESOLVED rows get a printed prefix (summarize.py:36-44); covered() returns a bool and does not report missing leaves. Operational."
+     },
+     {
+      "id": "F10",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Local test (review/v2/t.sh): `python3 -c 'sys.exit(1)' | tee /dev/null` gives exit 0 under `bash -e` and 1 under `bash --noprofile --norc -eo pipefail`. That GitHub's default run shell (no `shell:` key) is `bash -e {0}` and that `shell: bash` adds pipefail comes from GitHub docs and was not verified offline. Same pattern at heilbronn.yml:61-64 and 89-91. Fail-safe (a missing JSON means not covered); only the job's green/red status is misleading."
+     },
+     {
+      "id": "F11",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "Stub simulation with my own stubs (review/v2/rp: stub gurobipy.py and a sleeping heil_tri.py). (a) After re-using label t1, results/cloud/t1/DONE existed while the second job was still running (nothing removes DONE; run_parts.sh:23 only writes it). (b) The second run with a different prefix overwrote result_boundary_0.json, whose prefix became [[[2, 3, 4], 1]]. (d) Label 'my run' produced a file results/cloud/my containing 'ALL_DONE run/DONE', while the directory 'my run' held only job.sh. (c) Rewriting job.sh while it runs was not reproduced and stays unverified, as the reviewer said. Verified along the way: values in the unquoted heredoc are not re-expanded; a prefix with $HOME, backticks and $(...) reached argv literally."
+     },
+     {
+      "id": "F12",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "run_parts.sh:18/:20 use --threads \\$(nproc) and nothing serialises separate invocations (no lock). Gurobi's TimeLimit is wall-clock: ps showed etimes 2602 s for pid 896 while its log line reads 2600s at about 384% CPU. Oversubscription therefore reduces effective CPU per part within the same budget. Verdicts stay valid; this is efficiency only."
+     },
+     {
+      "id": "F13",
+      "verdict": "confirmed",
+      "corrected_severity": "info",
+      "reasoning": "heilbronn.yml:46 max-parallel 20 for boundary, plus a separate vertices job, gives 21 requested. The Free plan's 20-concurrent-job limit comes from README:41 and GitHub docs (not verified offline). 33 jobs therefore run in 2 waves, about 2 \u00d7 (5.5 h + setup), and 33 \u00d7 5.5 = 181.5 runner-hours. The summary job (needs: [boundary, vertices], :101) is the only writer to 'results', so the branch is empty until everything finishes. prefix is a single input, so each refined prefix needs its own run; 512/20 gives 26 waves \u00d7 5.5 h, about 143 h. The arithmetic checks out."
+     },
+     {
+      "id": "F14",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "heilbronn.yml:23-26: run_vertices defaults to true (README step 5 and the cloud prompt step 5 do tell the user to set it to false). hours is unvalidated: 5.97 h = 21492 s > 358 min = 21480 s. The n defaults to 8 and the target to 0.0339 (:10, :13); parts defaults to 0..15 (:19). All consequences are fail-safe or honest (the CERTIFIED line prints the actual target)."
+     },
+     {
+      "id": "F15",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "(a) grep finds workflow_heilbronn.yml and push_to_github.ps1 only in README:42-44, and `git log --all` for those paths returns 0 commits. (b) README:32 says timed-out jobs are UNRESOLVED, but heil_tri.py:152 gives PROVED when ob <= tgt, including TIME_LIMIT; this is sound. (c) heil_tri.py:7-8 mention 'z >= cutoff ... INFEASIBLE' and '--split-tris'; the actual defaults are cutmode bdstop (:103) and the flag --split (:104). (d) 33 \u00d7 330 \u00d7 0.006/0.012 = $65.3/$130.7; 'one full wave' is loose wording. (e) The sanity7 runtimes sum to 30.83 s. Cosmetic."
+     },
+     {
+      "id": "F16",
+      "verdict": "confirmed",
+      "corrected_severity": "low",
+      "reasoning": "heil_tri.py:115 `res = dict(vars(a))`. The sanity7 JSON keys are binaries, case, cutmode, cutoff, n, nodes, objbound, objval, out, part, points, prefix, recomputed_min_area, runtime, solver, split, status, threads, timelimit, verdict, wall and zub; there is no code SHA or solver version. The version appears only in the logs ('Gurobi Optimizer version 13.0.3'). Pins: workflow :57 '>=13,<14', and run_parts.sh:13 accepts any importable gurobipy. Operational."
+     },
+     {
+      "id": "F17",
+      "verdict": "uncertain",
+      "corrected_severity": "info",
+      "reasoning": "Cannot be verified offline. My recollection matches the reviewer's: GitHub's additional product terms for Actions exclude 'any other activity unrelated to the production, testing, deployment, or publication of the software project associated with the repository'. Whether running the repository's own proof pipeline counts as unrelated is a judgement call. Remains unverified; info."
+     }
+    ],
+    "verified_ok_disputes": [
+     "Item 4 ('Killed or cancelled jobs are safe ... summarize then treats the part as not covered') is right for soundness but wrong in one edge case. If a job is killed while json.dump is writing (heil_tri.py:156), the truncated JSON makes summarize.py crash at line 14 (json.load has no try/except). Reproduced with review/v2/cases/TR: JSONDecodeError, rc=1, no summary.md written. The part is therefore not 'treated as not covered': the whole Summarise step fails (bash -e), so the steps without if: always(), the 'summary' artifact upload (heilbronn.yml:116-121) and the save-to-branch step (:122-146), are skipped. No run folder reaches the 'results' branch, although per-job artifacts remain. Similarly, when no result JSON exists at all, summarize prints 'no result files found' and exits 0 without writing summary.md (reproduced, cases/EMPTY), so `cat summary.md` fails and the save step is skipped. Both fail safe for soundness and are low severity (a mid-write kill is improbable), but the item's claim about summarize's behaviour is inaccurate for this case.",
+     "Not a verified_ok item, but a correction to F5's evidence text ('After git checkout results on the VM, untracked results/cloud/* sits beside results/run-*'). On this VM layout, `git checkout results` actually fails with \"fatal: 'results' could be both a local file and a tracking branch\" (git 2.43.0, reproduced in review/v2/git/vm). `git switch results` works, but it removes heil_tri.py, summarize.py and run_parts.sh from the working tree, because the results branch is an orphan holding only results/. README step 6 as written cannot be executed in place. Doing it in /home/user/heil while run_parts.sh parts are queued would make those parts fail."
+    ]
+   }
+  }
+ ],
+ "critic": {
+  "findings": [
+   {
+    "id": "CC1",
+    "title": "Solver parameters from a gurobi.env file are never recorded, and status CUTOFF is PROVED without any bound check, so a Cutoff above the target set in that file would give a false PROVED",
+    "severity": "low",
+    "kind": "soundness",
+    "file": "/home/user/heil/heil_tri.py",
+    "line": 152,
+    "claim": "In bdstop mode heil_tri.py never sets Cutoff (line 19 sets it only when cutmode=='param'), so any Cutoff in effect must come from a gurobi.env file in the working directory. Line 152 maps status CUTOFF to PROVED without comparing any value with tgt. A Cutoff above tgt in that file (e.g. 0.03) would therefore mark as PROVED a region whose optimum lies anywhere in (tgt, 0.03). The result JSON records only the CLI arguments (line 115), so nothing in the files summarize.py reads would show it. Loosened OptimalityTol or FeasibilityTol set in the same file would weaken the dual bounds just as silently.",
+    "evidence": "/home/user/heil/gurobi.env exists (untracked; mtime 17:43:08; content 'NodefileStart 6'). /home/user/Claude/heilbronn-cloud-results/STATUS_260927.md (17:45 entry) says Gurobi logged 'Read parameters from file gurobi.env' in a test, and that the same file is to be committed to the GitHub repo root for the n=9 run. libgurobi130.so contains the string 'Using gurobi.env file'. gurobipy/_paramdetails.py:1519 says parameters can be set 'in a gurobi.env file'. critic/cutoff_verdict.py runs heil_tri.py:137-155 verbatim: status CUTOFF with objbound=0.03 gives PROVED, and CUTOFF with objbound=None gives PROVED. The reviewer's merge_results.py:66 accepts CUTOFF in any cutmode as well. One condition is unverified: heil_tri.py:121 reads ObjBound at status 6. If Gurobi refuses that query, the run crashes before json.dump (line 156), which fails safe. No existing log used gurobi.env (grep over results/cloud/*/log_*.txt finds nothing), and the current content, NodefileStart, is harmless.",
+    "recommendation": "Treat CUTOFF/INFEASIBLE as PROVED only when cutmode=='param' or 'constraint', in the verdict and/or in merge_results.py. Record the non-default parameters in the JSON: they appear in each log's 'Non-default parameters' block. Or have the merge step reject any run whose log reads gurobi.env with parameters other than NodefileStart, NodefileDir or SoftMemLimit. Keep Cutoff and any *Tol settings out of gurobi.env."
+   },
+   {
+    "id": "CC2",
+    "title": "gurobi.env cannot change parameters that heil_tri.py sets itself, so an F2 fix (MIPGap 0) made through gurobi.env would silently have no effect",
+    "severity": "low",
+    "kind": "completeness",
+    "file": "/home/user/heil/heil_tri.py",
+    "line": 18,
+    "claim": "The coordinator adjusts solver behaviour through gurobi.env to avoid editing heil_tri.py. Gurobi applies gurobi.env when the environment starts, at gp.Model() on line 17. Lines 17-20 then set Threads, TimeLimit, MIPGap=5e-5, MIPFocus, NonConvex and BestBdStop explicitly, which overrides those keys. So the F2 remedy (MIPGap=0) cannot be applied this way and needs a (non-mathematical) code change. F1's FeasibilityTol/IntegralityFocus remedy can go in gurobi.env, because heil_tri.py does not set those.",
+    "evidence": "heil_tri.py:17-20 (parameter assignments after gp.Model()). STATUS_260927.md 17:45 entry: the file is read at start ('Read parameters from file gurobi.env'). The override order follows from Gurobi's documented semantics and was not executed here (running Gurobi is forbidden). The log would show 'Set parameter MIPGap to value 5e-05' after the env-file line.",
+    "recommendation": "Make any change to MIPGap, MIPFocus or BestBdStop in heil_tri.py or through a CLI flag, and record it in the JSON. After the change, check the log's 'Non-default parameters' block."
+   },
+   {
+    "id": "CC3",
+    "title": "The first 5.5 h wave very likely leaves the Cantrell parts UNRESOLVED, and splitting cannot remove at least 4 zero-binary leaves around the optimum; their cost has never been measured",
+    "severity": "medium",
+    "kind": "completeness",
+    "file": "/home/user/heil/results/cloud/probe9_p31/log_31.txt",
+    "claim": "The part-31 bound falls about 0.005 per doubling of run time. Extrapolated (a heuristic), it would be about 0.040 at 19,800 s, against a target of 0.0274, and would need about 5 more doublings (~1e5 s) to reach the target. Deeper splits cannot get rid of the hard core. Cantrell's configuration has 4 distinct labelled embeddings, one each in parts 0, 29, 30 and 31. Each lies in exactly one leaf at every depth (no split area is zero). So at least 4 leaves must close to an absolute 2.74e-6 around an attained value of 43/1568. With all 75 orientations fixed these are continuous non-convex QCPs with 50 bilinear equalities. No run has measured how long that takes. The n=9 corners case has never been probed either.",
+    "evidence": "log_31.txt best bound: 0.07059 @300 s, 0.06562 @600 s, 0.06029 @1200 s, 0.05545 @2400 s, 0.05394 @3000 s. The incumbent is only 0.02490 at 3000 s, so Cantrell (0.027423) has not been found. critic/cantrell_embed.py: 4 distinct embeddings, parts {0,29,30,31} one each, no x-ties, 0 zero split areas. critic/cantrell_leaf.py writes critic/cantrell_leaf_prefix_part{0,29,30,31}.json (75 fixed signs each); a transcription of heil_tri.py's sign logic confirms 0 binaries remain.",
+    "recommendation": "After the timing probe ends, run one 10-20 min job with --split '[]' --prefix \"$(cat scratchpad/review/critic/cantrell_leaf_prefix_part31.json)\" (same cutoff). It measures the irreducible leaf cost, and through objval against 43/1568 it measures the F1/F2 incumbent inflation directly. Also run a short probe of --case vertices at n=9. Plan the refinement depth from these numbers, not from the 5.5 h wave."
+   },
+   {
+    "id": "CC4",
+    "title": "Update to F4: open-node growth has slowed, so the out-of-memory projection is probably pessimistic; node files will go to the working directory",
+    "severity": "low",
+    "kind": "operational",
+    "file": "/home/user/heil/results/cloud/probe9_p31/log_31.txt",
+    "claim": "Recent growth projects about 10 GB of node memory at 5.5 h, not 13.8-15.8 GB. Still unverified. With NodefileStart 6, nodes above 6 GB are written to NodefileDir, which defaults to '.': /home/user/heil on the VM (30 GB free) and the repository checkout on GitHub (runner disk size unverified).",
+    "evidence": "ps: pid 896 RSS 1,983,724 kB at 3089 s. Open nodes: 1,732,060 @2400 s and 2,020,976 @3000 s, about 480/s (714-750/s before 1700 s). An incumbent improvement at 2880 s cut open nodes from 1,998,365 to 1,956,946. That is about 0.96 KB per node. _paramdetails.py NodefileDir default '.'; df: 30 GB available.",
+    "recommendation": "Keep NodefileStart. For GitHub, set NodefileDir to a path with known free space, or add SoftMemLimit. Status 17 (MEM_LIMIT) gives UNRESOLVED, which is safe."
+   },
+   {
+    "id": "CC5",
+    "title": "No negative control: every end-to-end run so far was expected to say PROVED",
+    "severity": "low",
+    "kind": "completeness",
+    "file": "/home/user/heil/results/cloud/sanity7",
+    "claim": "The pipeline has never been shown to refuse a false claim end to end with the real solver. The n=7 run does show that the model reaches 7/144 (objval >= 7/144 - 1e-6 in parts 0, 5, 6, 7), and Cantrell embeds at n=9, so an over-restrictive model is ruled out at the optimum. The solver-to-verdict-to-summarize path with a target below the optimum is still untested.",
+    "evidence": "All 9 sanity7 results are PROVED. Their recomputed_min_area is 4.1e-7 to 5.6e-7 below 7/144, and so above 7/144*(1-1e-4) = 0.04860625. By inference, BETTER should fire at that target if the solver finds similar incumbents, but this has not been tested. There is no results branch locally (git branch -a shows only main), so the n=8 validation has not been checked either.",
+    "recommendation": "After the probe finishes, run bash run_parts.sh neg7 7 0.04860625 '[[2,3,4],[2,3,5],[2,3,6]]' '[]' 0.1 0 1 2 3 4 5 6 7 vertices (about 30 s). summarize must print BETTER_CONFIGURATION_FOUND lines and 'Not (yet) a complete certificate'."
+   },
+   {
+    "id": "CC6",
+    "title": "The SCIP code path was never executed; its PROVED rests on an unverified reading of getDualbound()",
+    "severity": "low",
+    "kind": "soundness",
+    "file": "/home/user/heil/heil_tri.py",
+    "line": 129,
+    "claim": "solver=scip is a documented workflow input, and README:82 offers it as a licence fallback. There, PROVED comes from ob=getDualbound() <= tgt. That is sound only if pyscipopt returns the global dual bound in the original (maximisation) objective space. I believe SCIPgetDualbound does, but pyscipopt is not installed, so this is unverified. getSolVal on the expression x[2]=1-y[2] (line 133) is also untested; if it fails, no JSON is written (fail-safe).",
+    "evidence": "heil_tri.py:24-31 and :126-134; heilbronn.yml:30-32, :57; the reviewers found pyscipopt absent on this VM.",
+    "recommendation": "Before any SCIP result enters a certificate, run the n=7 positive and negative controls with --solver scip."
+   },
+   {
+    "id": "CC7",
+    "title": "Correction: Cantrell has 4 distinct embeddings (one per part), not 3 per part",
+    "severity": "info",
+    "kind": "cosmetic",
+    "file": "/home/user/heil/cantrell_n9.txt",
+    "claim": "'3 embeddings each' counts the same labelled configuration three times, because Cantrell's point set is invariant under the affine rotation (x,y)->(1-x-y,x). It is not invariant under the reflection (x,y)->(1-x-y,y). The 4 distinct embeddings share p0=(3/28,0) and p1=(7/8,0) and differ in the choice of p2 and p3 (2 hypotenuse points \u00d7 2 left points). F1's 'all 12 embeddings' are therefore 4 distinct ones. No conclusion changes.",
+    "evidence": "critic/cantrell_embed.py: raw counts {0:3, 29:3, 30:3, 31:3}; distinct {0:1, 29:1, 30:1, 31:1}; C3-symmetric True; 13 triangles at exactly 43/1568; no corner occupied.",
+    "recommendation": "Say '4 distinct embeddings' in the reports."
+   },
+   {
+    "id": "CC8",
+    "title": "Correction: the digest's binary counts '73 and 74' are wrong",
+    "severity": "info",
+    "kind": "cosmetic",
+    "claim": "A transcription of heil_tri.py:13,62-90 gives 75 binaries for the unsplit boundary case, 65 for vertices, 70 under S5 (matching the probe log's '70 binary'), 71 for the README refinement [[0,3,4],[0,3,5],[1,2,4],[1,2,5]] alone, and 66 for that refinement under an S5 prefix. The geometry F2 conclusion (the splits take effect) stands.",
+    "evidence": "critic/nbin.py output; log_31.txt:26 'Variable types: 65 continuous, 70 integer (70 binary)'.",
+    "recommendation": "Use these counts in the binaries-consistency check that O2 suggests."
+   },
+   {
+    "id": "CC9",
+    "title": "The corners model keeps a 6-fold corner-relabelling symmetry",
+    "severity": "info",
+    "kind": "efficiency",
+    "file": "/home/user/heil/heil_tri.py",
+    "line": 41,
+    "claim": "Any affine symmetry g of T maps a configuration with all three corners occupied to another such configuration. After relabelling the corners to 0, 1, 2 and re-sorting the free points it is feasible in the vertices model: the V4 signs are forced for any such configuration. So each configuration appears up to 6 times. This bears on C1 (whether one unsplit corners run can finish). Symmetry breaking would be a model change and would need its own proof.",
+    "evidence": "Derivation from heil_tri.py:41-47, 64-73 and V4.",
+    "recommendation": "Probe the n=9 corners case (CC3) before deciding whether it needs refinement support."
+   },
+   {
+    "id": "CC10",
+    "title": "One truncated or corrupt result file makes summarize.py crash with no output",
+    "severity": "low",
+    "kind": "operational",
+    "file": "/home/user/heil/summarize.py",
+    "line": 14,
+    "claim": "heil_tri.py:156 writes the JSON non-atomically, and summarize.py:14 loads every file without error handling. One bad file blocks the whole aggregation. This fails closed and is unlikely.",
+    "evidence": "critic/trunc: the sanity7 files plus a 200-byte truncated result_boundary_3.json make summarize.py end in json.decoder.JSONDecodeError with no summary. merge_results.py:55-58 rejects such files.",
+    "recommendation": "Aggregate through merge_results.py, or catch errors per file."
+   },
+   {
+    "id": "CC11",
+    "title": "The README's 'precise claim' is marginally stronger than what is actually checked",
+    "severity": "info",
+    "kind": "cosmetic",
+    "file": "/home/user/heil/README_Heilbronn_GitHub_260927.md",
+    "line": 76,
+    "claim": "The comparison is against the float 0.027426211734693878, which is 5.2e-20 above (43/1568)(1+1e-4). This is negligible next to F3, but the word 'precise' overstates it.",
+    "evidence": "Fraction(float target) - 43/1568*(1+1/10^4) = 459/8827055269646172160000.",
+    "recommendation": "State the claim as numerical, with the float target."
+   }
+  ],
+  "verified_ok": [
+   "Cantrell's configuration (independent code, critic/cantrell_embed.py, exact Fractions): min area exactly 43/1568, reached by 13 triangles. No corner of T is occupied, so it plays no part in the corners case. It embeds in boundary parts 0, 29, 30 and 31 only, with T+ satisfied, no x-ties among free points and no zero-area split triangle.",
+   "Hand re-check of the self-contained case-split proof (V6). The Lemma-1 map I+eps*(M,t) keeps x=0 and x+y=1 invariant, sends bottom points with x < 1/2-eta to y' = eps(1/2-eta-x) >= 0, gives x'+y' = s + eps(1/2-eta)(1-s) <= 1, and has det = (1+eps(1/2+eta))(1+eps(eta-1/2)) = 1 + 2*eta*eps + eps^2(eta^2-1/4) > 1 for eps < 8*eta. Lemma 2: the linear part L with L e1 = (1,2s) and L e2 = (-2s,1) has det 1+4s^2. Interior points stay inside for small parameters because the configuration is finite.",
+   "T+ orientations (0,2,3) and (1,2,3) are forced: 2A = y3(1-y2-x0) + x0*y2 >= (1-y2)(1-x0) >= 0 whenever 1-y2-x0 < 0, and trivially >= 0 otherwise.",
+   "Refinement triangles (0,3,k) and (1,2,k), suggested in CLOUD_SESSION_PROMPT step 5, are not in T+. By formula, 2A(0,3,k) = -x0*yk - xk*y3 + x0*y3 takes both signs, so these splits take effect.",
+   "merge_results.py (reviewer tool, not in the repo) reviewed in full. It keeps the split order (json.dumps without sorting, line 79), so the part-bit mapping is preserved. It rejects vertices rows that have a split or prefix (73-75, which closes S1), a zub other than 0.5 (61, which closes S2), a PROVED verdict inconsistent with status/objbound (64-67), non-increasing or out-of-range triangles (27-29), bool or non-0/1 signs (24), and unreadable JSON (55-58). Among duplicates it keeps a PROVED row, and it keeps every BETTER row. Remaining gaps: CUTOFF is accepted in any cutmode (CC1), and nothing checks parameters or code version.",
+   "Gurobi Cutoff semantics (_paramdetails.py:378-379): CUTOFF means the optimum is worse than, i.e. strictly below, the cutoff for MAX. So CUTOFF -> PROVED is sound in cutmode 'param', where Cutoff = tgt.",
+   "Float target minus exact 43/1568*1.0001 = 5.2e-20; absolute margin 2.742347e-6.",
+   "sanity7 JSONs: all zub = 0.5 and binaries 25/22. Parts 0, 5, 6 and 7 have objval up to +7.9e-7 and recomputed_min_area 4.1e-7 to 5.6e-7 below 7/144. Part 7 has ob - tgt = -8.75e-8. No sanity7 or probe log read gurobi.env, which was created at 17:43:08, after sanity7 (17:11) and after the probe started (17:16).",
+   "The coordinator's timing probe is untouched; only ps and the log were read. It has 70 binaries, 165 rows and 135 columns and runs with the intended non-default parameters (log lines 3-8)."
+  ],
+  "depends_on_paper": [
+   "Only attribution: that heil_tri.py is 'model (1)' and that Proposition 1 / Corollary 1 say what heil_tri.py:3-6 and README:29 claim. The case split and the WLOG reductions have self-contained proofs (V5/V6, re-checked by hand here), so the certificate does not need the paper for them.",
+   "That 1e-4 relative, with floating-point Gurobi bounds and default tolerances, is 'the same certification standard' as the published n<=8 results (README:23, 76), and how the paper worded its claim.",
+   "The n=8 validation target 0.03389799608776131 (implied Delta_8 about 0.0338946 in T) and the timings 22.6 s / 2324 s (README:81). These affect validation and planning only.",
+   "Whether the paper's n=8 run met incumbent inflation or gap-closing trouble in the leaf containing the optimum (the n=8 analogue of F1/F2/CC3). It would be the best calibration for the n=9 Cantrell leaves."
+  ]
+ }
+}
