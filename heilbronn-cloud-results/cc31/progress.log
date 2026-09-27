@@ -20,3 +20,8 @@
 driver exit 1
 21:53:17 UTC restart with patched driver; seeds from /tmp/claude-0/-home-user-Claude/44d2b513-dd69-59ca-be1f-f4436a906e0f/scratchpad/combine_seed_215317
 21:53:17 UTC start: 19 seed region(s) under [[[2,3,4],1],[[2,3,5],1],[[2,3,6],1],[[2,3,7],1],[[2,3,8],1]]
+21:54:54 UTC split region (bound/target 1.046) on [[0,4,5],[0,4,6],[0,4,7],[0,4,8]]: 15 pieces proved, 1 open; total runs 16, proved 15, open regions 19
+21:54:54 UTC STOP file found: 19 region(s) still open; re-run to resume
+driver exit 1
+21:54:59 UTC restart with patched driver; seeds from /tmp/claude-0/-home-user-Claude/44d2b513-dd69-59ca-be1f-f4436a906e0f/scratchpad/combine_seed_215459
+21:54:59 UTC start: 19 unresolved seed region(s) and 3 missing piece(s) under [[[2,3,4],1],[[2,3,5],1],[[2,3,6],1],[[2,3,7],1],[[2,3,8],1]]

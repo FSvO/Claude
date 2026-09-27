@@ -7,7 +7,8 @@ Usage (from any folder):
 
 It only calls heil_tri.py with the same arguments run_parts.sh uses (no change to the mathematics):
   * seeds: the UNRESOLVED boundary regions in the combiner's open_leaves.json whose region contains every
-    [triangle, sign] of --under (for example part 31's five signs);
+    [triangle, sign] of --under (for example part 31's five signs); MISSING pieces there are run first with
+    the split their siblings used (this completes splits interrupted by a STOP);
   * a region is split on the first 4 candidate triangles not yet fixed (same default candidate list as
     combine_plan_260927.py) and its 16 pieces run for --piece-secs each; unresolved pieces become new regions;
   * a region whose best bound is within --near x target first gets one run of --long-secs on its own
@@ -79,15 +80,33 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     under = {(tuple(t), int(s)) for t, s in json.loads(a.under)}
-    heap, count = [], itertools.count()
+    heap, count, missing = [], itertools.count(), []
     for leaf in json.load(open(a.seeds)):
         region = [[list(t), int(s)] for t, s in leaf['region']]
-        if leaf['case'] == 'boundary' and leaf['reason'] == 'UNRESOLVED' and under <= {(tuple(t), s) for t, s in region}:
+        if leaf['case'] != 'boundary' or not under <= {(tuple(t), s) for t, s in region}:
+            continue
+        if leaf['reason'] == 'UNRESOLVED':
             b = leaf.get('best_bound') or 1.0
             heapq.heappush(heap, (b / T, next(count), region, leaf.get('split') == [] and (leaf.get('runtime') or 0) >= a.long_secs))
-    log(a.out, f'start: {len(heap)} seed region(s) under {a.under}')
+        elif leaf['reason'] == 'MISSING':
+            # a piece of a split that was never run (e.g. the driver was stopped mid-region): run exactly that piece,
+            # with the split its siblings used, so that split can be completed
+            missing.append(([[list(t), int(s)] for t, s in leaf['parent_prefix']], leaf['split'], int(leaf['part']), region))
+    log(a.out, f'start: {len(heap)} unresolved seed region(s) and {len(missing)} missing piece(s) under {a.under}')
     proved = runs = 0
     left_open = []          # regions that could not be split and were not proved: reported at the end
+    for parent, split, part, region in missing:
+        if os.path.exists(os.path.join(a.out, 'STOP')):
+            log(a.out, 'STOP file found while running missing pieces; re-run to resume'); return 1
+        r = solve(a.heil, a.out, parent, split, part, a.piece_secs); runs += 1
+        if r.get('verdict') == 'PROVED':
+            proved += 1
+        elif r.get('verdict') == 'BETTER_CONFIGURATION_FOUND':
+            log(a.out, 'BETTER_CONFIGURATION_FOUND - stopping; verify with verify_config.py'); return 3
+        else:
+            heapq.heappush(heap, ((r.get('objbound') or T * 9) / T, next(count), region, False))
+    if missing:
+        log(a.out, f'missing pieces done: total runs {runs}, proved {proved}, open regions {len(heap)}')
     while heap:
         if os.path.exists(os.path.join(a.out, 'STOP')):
             log(a.out, f'STOP file found: {len(heap)} region(s) still open; re-run to resume')
