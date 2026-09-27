@@ -7,34 +7,40 @@ Usage
          [--summarize /home/user/heil/summarize.py] [--candidates JSON] [--split-size 4] [--hours H]
          [--label-prefix L]
 
-  --roots         folders searched recursively for result_*.json (a checkout of the GitHub 'results' branch,
-                  the VM's results/cloud, ...). The originals are only read, never changed.
+  --roots         folders searched recursively (hidden folders included) for result_*.json: a checkout of
+                  the GitHub 'results' branch, the VM's results/cloud, ... The originals are only read.
   --out           a new or empty folder. It receives verbatim copies of the selected result files,
-                  report.md, plan.json and summary_summarize.md (summarize.py's output over the copies).
+                  report.md, plan.json, open_leaves.json, summary_summarize.md (summarize.py's output over
+                  the copies) and the VM driver scripts vm_refine.sh / vm_missing.sh.
   --summarize     path of summarize.py (default /home/user/heil/summarize.py); pass '' to skip it.
-                  The VM commands in the plan are meant to be run in the folder that holds it.
+                  The VM drivers run in the folder that holds it (default /home/user/heil).
   --candidates    JSON list of triangles, or the path of a file holding one, in the order they should be
                   used for new splits (default: DEFAULT_CANDIDATES below, then all triangles among 4..n-1).
   --split-size    triangles per proposed split (default 4, i.e. 16 parts per region).
-  --hours         solver time limit per part in the proposed runs (default 5.5).
-  --label-prefix  prefix of the VM result-folder labels in the proposed run_parts.sh commands
-                  (default 'r<month><day><hour><minute><second>_', so labels do not reuse an old folder).
+  --hours         solver time limit per part in the proposed runs (default 5.5; more than 0; GitHub jobs
+                  only allow up to 5.5, so a larger value leaves only the VM route).
+  --label-prefix  prefix of the VM result-folder labels (default 'r<month><day><hour><minute><second>_',
+                  so labels do not reuse an old folder).
 
 What it does (numbers match the sections of report.md)
   1. reads every result_*.json under the roots; an unreadable or truncated file is reported, never fatal;
+     lists every BETTER row first: verdict BETTER_CONFIGURATION_FOUND, or points whose minimum area
+     (recomputed here) is above the row's own cutoff, or above THIS run's target when the row has at
+     least n points (any n of them then beat the target too, whatever the row's cutoff or n field);
   2. keeps the rows with this n and this target (exact float equality) and counts the others by reason;
   3. checks each kept row for proof use: zub >= 0.5, case boundary/vertices, verdict PROVED backed by the
      status or the bound, well-formed split and prefix (odd triangles only give warnings: heil_tri.py then
      solves a larger region, which is still sound);
-  4. lists every BETTER_CONFIGURATION_FOUND row first (also rows whose points, recomputed here, beat
-     their target) and always copies it;
   5. groups duplicate rows by canonical key (case, sorted prefix, split, part) and copies one file per key;
   6. reports split texts that differ only in spacing (summarize.py treats them as different splits);
   7. runs summarize.py over the copies;
   8. decides coverage of the boundary tree and of the corners (vertices) tree with its own code;
-  9. lists the open leaves of both trees, and
- 10. proposes the next runs: plan.json, the value for the batch workflow input 'nodes', classic workflow
-     inputs, and VM commands.
+  9. lists the open leaves of both trees (UNRESOLVED, MISSING, or BETTER = a row there beats the target), and
+ 10. proposes the next runs, in two groups: refinements of UNRESOLVED leaves, and re-runs of MISSING parts
+     (these may simply still be running elsewhere). Output: plan.json, values for the batch workflow input
+     'nodes', classic workflow inputs, and VM driver scripts that run the regions one after another.
+     A MISSING re-run reuses the split text of the parts already run (spaces included), so that
+     summarize.py can combine them. BETTER leaves are never planned: verify them first.
 
 Output layout
   OUTDIR/<index>_<origin>/result_*.json    verbatim copies: one file per canonical key (rows valid for proof)
@@ -46,15 +52,19 @@ Output layout
                                            BETTER_CONFIGURATION_FOUND; renamed so summarize.py skips them.
   OUTDIR/report.md                         the report (also printed)
   OUTDIR/plan.json                         {"n","target","hours","nodes":[{"case","prefix","split","parts",
-                                           "reason","best_bound","note"}]}
+                                           "reason","best_bound","note","split_text","label","in_batch"}]}
   OUTDIR/open_leaves.json                  every open leaf with its full region prefix
   OUTDIR/summary_summarize.md              written by summarize.py
+  OUTDIR/vm_refine.sh, OUTDIR/vm_missing.sh   VM drivers (only when the group is not empty); start one with
+                                           nohup bash OUTDIR/vm_refine.sh > OUTDIR/vm_refine.log 2>&1 &
 
 Exit codes (the first that applies)
-  3  a BETTER_CONFIGURATION_FOUND row with this n exists (any target; also an unparseable file that contains
-     that text, unless it names another n): check it with verify_config.py first
+  3  a BETTER row that concerns this n exists (see 1. above; a row whose n field is missing or unreadable
+     counts), or an unparseable file contains the text BETTER_CONFIGURATION_FOUND (unless it names another n),
+     or the tool crashed and some result file under the roots contains that text:
+     check it with verify_config.py first
   2  input problems: unreadable or truncated files, rows with missing or malformed fields, a missing root,
-     bad arguments, or OUTDIR not empty
+     bad arguments, OUTDIR not empty, or an internal error of this tool (then no report is trusted)
   0  CERTIFIED by this tool's own coverage check (boundary tree and corners tree fully covered)
   1  not certified: open regions remain (see the plan)
 """
@@ -67,8 +77,10 @@ import json
 import math
 import os
 import re
+import shlex
 import subprocess
 import sys
+import traceback
 from collections import Counter
 
 BETTER = 'BETTER_CONFIGURATION_FOUND'
@@ -76,11 +88,16 @@ BETTER = 'BETTER_CONFIGURATION_FOUND'
 REQUIRED = ('n', 'case', 'cutoff', 'zub', 'split', 'part', 'prefix', 'verdict', 'status', 'runtime')
 MAX_SPLIT = 16          # longer splits (65536+ parts) are not used for proof, to keep the checks bounded
 ZUB_MIN = 0.5           # heil_tri.py's model is a relaxation only if z may reach 1/2 (any area in T is <= 1/2)
+MAX_POINTS = 40         # a points list longer than this is not re-measured (C(40,3) = 9880 triangles)
+MAX_NESTING = 8         # a split / prefix text nested deeper than this is malformed (a prefix needs 3 levels)
 # Mirror of the input checks of tools/heilbronn-batch_260927.yml (27 Sep 2026), used to decide which plan
 # regions can go into the batch workflow: boundary case, split of 1..6 sorted triangles outside T+, prefix
 # without repeats or T+ triangles, split not overlapping the prefix, at most 256 jobs per run.
 BATCH_MAX_SPLIT = 6
 BATCH_MAX_JOBS = 256
+GITHUB_MAX_JOBS = 256   # GitHub refuses a matrix of more than 256 jobs (classic workflow: one job per part)
+GITHUB_MAX_HOURS = 5.5  # heilbronn.yml stops each job after 358 minutes; 5.5 h leaves time for setup
+SAFE_SPLIT_TEXT = re.compile(r'[\[\]0-9, ]+')   # split texts that can be passed on verbatim (shell, input box)
 DEFAULT_CANDIDATES = [[0, 3, 4], [0, 3, 5], [1, 2, 4], [1, 2, 5], [0, 3, 6], [0, 3, 7], [1, 2, 6], [1, 2, 7],
                       [0, 3, 8], [1, 2, 8], [0, 2, 4], [0, 2, 5], [1, 3, 4], [1, 3, 5], [0, 2, 6], [0, 2, 7],
                       [1, 3, 6], [1, 3, 7], [0, 2, 8], [1, 3, 8]]
@@ -103,6 +120,19 @@ def is_num(v):
 def as_float(v):
     """float(v) for a real number, else None."""
     return float(v) if is_num(v) else None
+
+
+def n_matches(v, n_wanted):
+    """Could the field value v mean n = n_wanted? False only when v is readable as a finite number (also in a
+    string such as '8') that differs from n_wanted; a missing or unreadable n counts as a match."""
+    if isinstance(v, str):
+        try:
+            v = float(v.strip())
+        except ValueError:
+            return True
+    if is_num(v) and math.isfinite(v):
+        return v == n_wanted
+    return True
 
 
 def short(text, width=60):
@@ -131,10 +161,10 @@ def forced_triangles(case, n):
             | {(0, 2, k) for k in range(3, n)})
 
 
-def recompute_min_area(points, n):
+def recompute_min_area(points):
     """Minimum triangle area of a row's points, computed exactly as heil_tri.py does (clip into T first).
-    Returns None when the points are missing or malformed."""
-    if not isinstance(points, list) or len(points) != n or n < 3:
+    Works for any number m of points (3 <= m <= MAX_POINTS); returns None when they are missing or malformed."""
+    if not isinstance(points, list) or not 3 <= len(points) <= MAX_POINTS:
         return None
     pts = []
     for p in points:
@@ -149,9 +179,23 @@ def recompute_min_area(points, n):
                for p, q, r in itertools.combinations(pts, 3))
 
 
+def load_shallow(text):
+    """json.loads for a split or prefix text, refusing deep nesting first (json.loads would recurse)."""
+    depth = deepest = 0
+    for ch in text:
+        if ch in '[{':
+            depth += 1
+            deepest = max(deepest, depth)
+        elif ch in ']}':
+            depth -= 1
+    if deepest > MAX_NESTING:
+        raise ValueError(f'nested {deepest} levels deep (at most {MAX_NESTING} expected)')
+    return json.loads(text)
+
+
 def parse_split(text):
     """Split text -> list of triangles (each a list of 3 ints), or raise ValueError."""
-    v = json.loads(text)
+    v = load_shallow(text)
     if not isinstance(v, list) or not all(isinstance(t, list) and len(t) == 3 and all(is_int(i) for i in t)
                                           for t in v):
         raise ValueError('split must be a JSON list of [i,j,k] integer triples')
@@ -160,7 +204,7 @@ def parse_split(text):
 
 def parse_prefix(text):
     """Prefix text -> list of [[i,j,k], sign] entries, or raise ValueError."""
-    v = json.loads(text)
+    v = load_shallow(text)
     ok = isinstance(v, list) and all(
         isinstance(e, list) and len(e) == 2 and isinstance(e[0], list) and len(e[0]) == 3
         and all(is_int(i) for i in e[0]) and is_int(e[1]) for e in v)
@@ -212,7 +256,9 @@ class Row:
         self.key = None             # canonical key (case, prefix, split, part) when it can be computed
         self.prefix_list = self.split_list = None
         self.better_why = []        # why this row is treated as BETTER
+        self.affects_this_n = False  # True if this BETTER row concerns the n being certified (exit code 3)
         self.recomputed = None      # this tool's recomputation of the minimum area of the points
+        self.n_points = 0           # number of points behind self.recomputed
         self.copied_to = None
 
     def get(self, k, default=None):
@@ -229,25 +275,34 @@ class Row:
 
     @property
     def objbound(self):
-        return as_float(self.data.get('objbound'))
+        b = as_float(self.data.get('objbound'))
+        return None if b is None or math.isnan(b) else b
 
 
 def examine(row, n_wanted, target):
     """Sort a parsed row into a category and fill in its problems, rejections, warnings and key."""
     d = row.data
-    n, cutoff = d.get('n'), as_float(d.get('cutoff'))
-    # BETTER: by verdict, or by recomputing the points against the row's own cutoff.
-    if is_int(n):
-        row.recomputed = recompute_min_area(d.get('points'), n)
-    if row.verdict == BETTER:
+    n, cutoff, verdict = d.get('n'), as_float(d.get('cutoff')), row.verdict
+    # 1./4. BETTER. m >= n points in T whose minimum area is above the target refute the claim for n (any n
+    # of them have a minimum area at least as large), whatever the row's own cutoff or n field says.
+    row.recomputed = recompute_min_area(d.get('points'))
+    row.n_points = len(d['points']) if row.recomputed is not None else 0
+    if verdict == BETTER:
         row.better_why.append('verdict BETTER_CONFIGURATION_FOUND')
-    if row.recomputed is not None and cutoff is not None and row.recomputed > cutoff and row.verdict != BETTER:
+    elif not isinstance(verdict, (str, type(None))) and BETTER in json.dumps(verdict):
+        row.better_why.append(f'malformed verdict {short(json.dumps(verdict), 80)} mentions {BETTER}')
+    if row.recomputed is not None and cutoff is not None and row.recomputed > cutoff and verdict != BETTER:
         row.better_why.append(f'recomputed minimum area {row.recomputed!r} of its points exceeds its cutoff '
-                              f'{cutoff!r}, but its verdict is {row.verdict}')
+                              f'{cutoff!r}, but its verdict is {verdict!r}')
+    beats_target = row.recomputed is not None and row.n_points >= n_wanted and row.recomputed > target
+    if beats_target and cutoff != target:
+        row.better_why.append(f"its {row.n_points} points have recomputed minimum area {row.recomputed!r}, above "
+                              f"this run's target {target!r} (its own cutoff is {d.get('cutoff')!r})")
+    row.affects_this_n = beats_target or (bool(row.better_why) and n_matches(n, n_wanted))
     # 2. keep only this n and this target
     if not is_int(n) or cutoff is None:
         row.category = 'broken'
-        row.problems.append('field n or cutoff is missing or not a number')
+        row.problems.append('field n is missing or not an integer, or field cutoff is missing or not a number')
         return
     if n != n_wanted:
         row.category = 'other_n'
@@ -270,22 +325,25 @@ def examine(row, n_wanted, target):
         row.problems.append('field runtime is not a number')
     if 'verdict' in d and not isinstance(d['verdict'], (str, type(None))):
         row.problems.append('field verdict is not a string')
-    if isinstance(d.get('split'), str):
-        try:
-            row.split_list = parse_split(d['split'])
-        except ValueError as e:
-            row.problems.append(f'malformed split {short(d["split"], 80)!r}: {e}')
-    if isinstance(d.get('prefix'), str):
-        try:
-            row.prefix_list = sorted(parse_prefix(d['prefix']))
-        except (ValueError, TypeError) as e:
-            row.problems.append(f'malformed prefix {short(d["prefix"], 80)!r}: {e}')
+    if isinstance(d.get('points'), list) and len(d['points']) != n:
+        row.problems.append(f"field points has {len(d['points'])} entries, not n = {n}")
+    for k, parse in (('split', parse_split), ('prefix', parse_prefix)):
+        if isinstance(d.get(k), str):
+            try:
+                v = parse(d[k])
+                if k == 'split':
+                    row.split_list = v
+                else:
+                    row.prefix_list = sorted(v)
+            except (ValueError, TypeError, RecursionError) as e:
+                row.problems.append(f'malformed {k} {short(d[k], 80)!r}: {type(e).__name__}: {short(e, 200)}')
     if row.problems:
         return
     # ... then proof validity (row still reported either way)
     zub = as_float(d['zub'])
-    if zub is None or zub < ZUB_MIN:
-        row.rejects.append(f'zub = {d["zub"]!r} < {ZUB_MIN}: the model is then not a relaxation, so PROVED means nothing')
+    if zub is None or not zub >= ZUB_MIN:          # written this way so that NaN fails as well
+        row.rejects.append(f'zub = {d["zub"]!r} (need a number >= {ZUB_MIN}): the model is a relaxation only then, '
+                           'so PROVED means nothing')
     if d['case'] not in ('boundary', 'vertices'):
         row.rejects.append(f"case {d['case']!r} is neither 'boundary' nor 'vertices'")
     d_split = len(row.split_list)
@@ -293,11 +351,11 @@ def examine(row, n_wanted, target):
         row.rejects.append(f'split has {d_split} triangles (more than {MAX_SPLIT}); not used by this checker')
     elif not 0 <= d['part'] < 2 ** d_split:
         row.rejects.append(f"part {d['part']} is outside 0..{2 ** d_split - 1} for this split")
-    if row.verdict == 'PROVED':
+    if verdict == 'PROVED':
         ob = row.objbound
         if not (d['status'] in ('INFEASIBLE', 'CUTOFF') or (ob is not None and ob <= cutoff)):
             row.rejects.append(f"verdict PROVED is not backed by status {d['status']!r} and bound {d.get('objbound')!r}")
-    if row.better_why and row.verdict == 'PROVED':
+    if row.better_why and verdict == 'PROVED':
         row.rejects.append('its points beat the target, so PROVED cannot be right')
     if d['case'] in ('boundary', 'vertices'):
         row.warnings += triangle_warnings(row.split_list, row.prefix_list, n, d['case'])
@@ -310,8 +368,9 @@ class Tree:
     A node is a region identified by its canonical prefix; refining it with split S creates 2^|S| children
     whose prefixes are the node prefix plus [[S[i], (k >> i) & 1]]."""
 
-    def __init__(self, case, rows):
+    def __init__(self, case, rows, better_keys=()):
         self.case = case
+        self.better_keys = set(better_keys)   # keys of rows (valid or not) whose points / verdict beat the target
         self.nodes = {}          # prefix key -> {split key: {part: [rows]}}
         self.prefix_of = {}      # prefix key -> sorted prefix list
         self.split_of = {}       # split key -> split list (order kept)
@@ -324,6 +383,10 @@ class Tree:
 
     def rows(self, pkey, skey, k):
         return self.nodes.get(pkey, {}).get(skey, {}).get(k, [])
+
+    def split_texts(self, pkey, skey):
+        """The raw split texts of the rows already run for this (region, split)."""
+        return {r.get('split') for rs in self.nodes.get(pkey, {}).get(skey, {}).values() for r in rs}
 
     def proved(self, pkey, skey, k):
         return any(r.verdict == 'PROVED' for r in self.rows(pkey, skey, k))
@@ -371,8 +434,8 @@ class Tree:
                 return
             seen.add(pkey)
             if pkey not in self.nodes:          # only possible at the root: nothing was ever run here
-                leaves.append(dict(case=self.case, parent=plist, split=None, part=None, region=plist,
-                                   reason='MISSING', detail='no result at all for this case', best=None,
+                leaves.append(dict(case=self.case, parent=plist, pkey=pkey, split=None, skey=None, part=None,
+                                   region=plist, reason='MISSING', detail='no result at all for this case', best=None,
                                    runtime=None, file=None, depth=depth))
                 return
             skey = self.best_split(pkey)
@@ -385,8 +448,8 @@ class Tree:
                     visit(ckey, clist, depth + 1)
                     continue
                 rs = self.rows(pkey, skey, k)
-                leaf = dict(case=self.case, parent=plist, split=slist, part=k, region=clist, depth=depth,
-                            best=None, runtime=None, file=None)
+                leaf = dict(case=self.case, parent=plist, pkey=pkey, split=slist, skey=skey, part=k, region=clist,
+                            depth=depth, best=None, runtime=None, file=None)
                 if rs:
                     with_bound = [r for r in rs if r.objbound is not None]
                     best = min(with_bound, key=lambda r: r.objbound) if with_bound else rs[0]
@@ -394,6 +457,8 @@ class Tree:
                                 file=best.path, detail=f'{len(rs)} row(s), verdicts {sorted(Counter(str(r.verdict) for r in rs).items())}')
                 else:
                     leaf.update(reason='MISSING', detail='part never run (or only rejected rows)')
+                if (self.case, pkey, skey, k) in self.better_keys:
+                    leaf.update(reason='BETTER', detail='a row for this part reports a configuration above the target')
                 leaves.append(leaf)
 
         visit('[]', [], 0)
@@ -456,7 +521,7 @@ def propose_split(case, n, plist, candidates, size):
 
 
 def batch_problem(node, n):
-    """Why the batch workflow would refuse this node (None if it accepts it)."""
+    """Why the batch workflow would refuse this node, or why its result would not combine (None if fine)."""
     if node['case'] != 'boundary':
         return 'the batch workflow runs only the boundary case'
     forced = forced_triangles('boundary', n)
@@ -470,14 +535,19 @@ def batch_problem(node, n):
     fixed = [tuple(t) for t, _ in node['prefix']]
     if len(set(fixed)) != len(fixed) or set(fixed) & {tuple(t) for t in node['split']}:
         return 'prefix repeats a triangle or overlaps the split'
+    if node['split_text'] != compact(node['split']):
+        return (f"the parts already run wrote the split as '{node['split_text']}' (with spaces); the batch workflow "
+                'writes it without spaces, so summarize.py would not combine the re-run with them')
     return None
 
 
-def make_plan(leaves, n, candidates, size):
+def make_plan(leaves, trees, n, candidates, size):
     """One plan node per UNRESOLVED leaf (split it further) and one per (region, split) with MISSING parts
-    (run those parts again with the original prefix and split)."""
+    (run those parts again with the original prefix and the original split TEXT). BETTER leaves: none."""
     nodes, missing = [], {}
     for lf in leaves:
+        if lf['reason'] == 'BETTER':
+            continue                                                  # verify first, never refine blindly
         if lf['reason'] == 'MISSING' and lf['split'] is None:          # a case never run at all
             if lf['case'] == 'vertices':
                 split, note = [], 'corners case never run: run it unsplit (as the workflows do)'
@@ -485,13 +555,24 @@ def make_plan(leaves, n, candidates, size):
                 split = [[2, 3, k] for k in range(4, n)]
                 note = 'boundary case never run: run the first-wave split of the README'
             nodes.append(dict(case=lf['case'], prefix=[], split=split, parts=list(range(2 ** len(split))),
-                              reason='MISSING', best_bound=None, note=note))
+                              reason='MISSING', best_bound=None, note=note, split_text=compact(split)))
         elif lf['reason'] == 'MISSING':
-            key = (lf['case'], compact(lf['parent']), compact(lf['split']))
+            key = (lf['case'], lf['pkey'], lf['skey'])
             if key not in missing:
+                note = 're-run these parts with their original prefix and split'
+                texts = sorted(t for t in trees[lf['case']].split_texts(lf['pkey'], lf['skey']) if isinstance(t, str))
+                if len(texts) == 1 and SAFE_SPLIT_TEXT.fullmatch(texts[0]):
+                    split_text = texts[0]         # exactly what the siblings used, so summarize.py combines them
+                    if split_text != compact(lf['split']):
+                        note += (f"; the split text '{split_text}' (with spaces) is kept exactly, so that summarize.py "
+                                 'combines the re-run with the parts already run')
+                else:
+                    split_text = compact(lf['split'])
+                    note += (f"; the parts already run wrote this split in {len(texts)} ways "
+                             f"({', '.join(repr(t) for t in texts)}), so summarize.py cannot combine them in any case "
+                             '(this tool does); the re-run uses the compact form')
                 missing[key] = dict(case=lf['case'], prefix=lf['parent'], split=lf['split'], parts=[],
-                                    reason='MISSING', best_bound=None,
-                                    note='re-run these parts with their original prefix and split')
+                                    reason='MISSING', best_bound=None, note=note, split_text=split_text)
                 nodes.append(missing[key])
             missing[key]['parts'].append(lf['part'])
         else:
@@ -502,8 +583,77 @@ def make_plan(leaves, n, candidates, size):
             if not split:
                 note += '; no candidate left, so this re-runs the region unsplit'
             nodes.append(dict(case=lf['case'], prefix=lf['region'], split=split, parts=list(range(2 ** len(split))),
-                              reason='UNRESOLVED', best_bound=lf['best'], note=note))
-    return nodes
+                              reason='UNRESOLVED', best_bound=lf['best'], note=note, split_text=compact(split)))
+    # refinements first, then re-runs of MISSING parts (two groups in the report)
+    return [x for x in nodes if x['reason'] == 'UNRESOLVED'] + [x for x in nodes if x['reason'] == 'MISSING']
+
+
+def batch_chunks(nodes):
+    """Values for the batch workflow input 'nodes', each of at most BATCH_MAX_JOBS jobs."""
+    batches, cur, cur_jobs = [], [], 0
+    for x in nodes:
+        if cur and cur_jobs + len(x['parts']) > BATCH_MAX_JOBS:
+            batches.append(cur)
+            cur, cur_jobs = [], 0
+        entry = dict(prefix=x['prefix'], split=x['split'])
+        if x['parts'] != list(range(2 ** len(x['split']))):
+            entry['parts'] = x['parts']
+        cur.append(entry)
+        cur_jobs += len(x['parts'])
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def vm_driver(nodes, n, target, hours, heil_dir, title, now):
+    """Text of a bash driver that runs the given regions ONE AFTER ANOTHER on the VM.
+    run_parts.sh returns at once (its job runs in the background and writes DONE at the end), so the driver
+    waits for DONE before the next region. Before each region it also waits until no heil_tri.py process runs
+    on the machine, and a lock (flock) keeps two drivers from running at the same time."""
+    hours_txt, secs = repr(hours), int(hours * 3600)
+    q = shlex.quote
+    L = ['#!/usr/bin/env bash',
+         f'# {title}: {len(nodes)} region(s), {sum(len(x["parts"]) for x in nodes)} part(s) of {hours_txt} h each.',
+         f'# Written by combine_plan_260927.py on {now:%Y-%m-%d %H:%M} UTC. Regions run one after another; a region',
+         '# whose results/cloud/<label>/DONE exists is skipped, so the driver can simply be started again.',
+         '# Start:  nohup bash <this file> > <this file without .sh>.log 2>&1 &',
+         f'cd {q(heil_dir)} || exit 1',
+         'POLL=${COMBINE_PLAN_POLL:-60}      # seconds between checks',
+         'say() { echo "$(date -u \'+%Y-%m-%d %H:%M:%S\') UTC $*"; }',
+         'mkdir -p results/cloud || exit 1',
+         'exec 9>>results/cloud/.combine_plan_vm.lock   # one driver at a time: a second one waits here',
+         'flock 9 || say "flock failed: not protected against a second driver"',
+         'wait_idle() {   # wait while ANY heil_tri.py process runs on this machine (ours or another experiment)',
+         '  local said=0',
+         "  while pgrep -f 'heil_tri[.]py' > /dev/null; do",
+         '    [ $said = 0 ] && say "waiting for other heil_tri.py processes to finish: $(pgrep -f \'heil_tri[.]py\' | tr \'\\n\' \' \')"',
+         '    said=1; sleep "$POLL"',
+         '  done',
+         '}',
+         'wait_done() { until [ -f "results/cloud/$1/DONE" ]; do sleep "$POLL"; done; }',
+         '']
+    for x in nodes:
+        lab = x['label']
+        L.append(f'# {lab}: {x["case"]}, {x["reason"]}; {x["note"]}')
+        L.append(f'if [ -f results/cloud/{lab}/DONE ]; then say "skip {lab}: DONE exists"; else')
+        L.append(f'  wait_idle; say "start {lab} ({len(x["parts"])} part(s))"')
+        if x['case'] == 'boundary':
+            L.append(f"  bash run_parts.sh {lab} {n} {target!r} '{x['split_text']}' '{compact(x['prefix'])}' "
+                     f"{hours_txt} {' '.join(map(str, x['parts']))}")
+        elif not x['split'] and not x['prefix']:
+            L.append(f"  bash run_parts.sh {lab} {n} {target!r} '[]' '[]' {hours_txt} vertices")
+        else:   # split corners case: run_parts.sh cannot do it, so call heil_tri.py directly (in this driver)
+            L.append(f'  mkdir -p results/cloud/{lab}')
+            L.append(f"  for p in {' '.join(map(str, x['parts']))}; do")
+            L.append(f"    python3 heil_tri.py --n {n} --case vertices --cutoff {target!r} --split '{x['split_text']}' "
+                     f"--part $p --prefix '{compact(x['prefix'])}' --threads $(nproc) --timelimit {secs} "
+                     f"--out results/cloud/{lab}/result_vertices_$p.json > results/cloud/{lab}/log_vertices_$p.txt 2>&1")
+            L.append('  done')
+            L.append(f'  echo ALL_DONE > results/cloud/{lab}/DONE')
+        L.append(f'  wait_done {lab}; say "done {lab}"')
+        L.append('fi')
+    L.append('say ALL_DONE')
+    return '\n'.join(L) + '\n'
 
 
 # ----------------------------------------------------------------------------------------------- output
@@ -560,7 +710,12 @@ def run_summarize(path, outdir):
     return res
 
 
-def main(argv=None):
+def find_result_files(root):
+    """Every result_*.json under root, hidden folders included (summarize.py's glob skips those)."""
+    return sorted(glob.glob(os.path.join(glob.escape(root), '**', 'result_*.json'), recursive=True, include_hidden=True))
+
+
+def run(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     ap.add_argument('--n', type=int, required=True)
@@ -579,6 +734,15 @@ def main(argv=None):
     if not 1 <= a.split_size <= MAX_SPLIT:
         print(f'--split-size must be between 1 and {MAX_SPLIT}', file=sys.stderr)
         return 2
+    if not (math.isfinite(a.hours) and a.hours * 3600 >= 1):
+        print(f'--hours must be a number of at least 1/3600 (one second), got {a.hours!r}', file=sys.stderr)
+        return 2
+    if not (math.isfinite(a.target) and a.target > 0):
+        print(f'--target must be a positive number, got {a.target!r}', file=sys.stderr)
+        return 2
+    if not re.fullmatch(r'[A-Za-z0-9._-]*', label_prefix):
+        print('--label-prefix may only contain letters, digits, ".", "_" and "-"', file=sys.stderr)
+        return 2
     if os.path.exists(a.out) and (not os.path.isdir(a.out) or os.listdir(a.out)):
         print(f'OUTDIR {a.out} exists and is not an empty folder; choose a new one (nothing was done).', file=sys.stderr)
         return 2
@@ -593,7 +757,7 @@ def main(argv=None):
     problems = []           # (path or '-', text): input problems -> exit code 2
     notes = []              # general notes for the report
     # 1. find and parse every result_*.json
-    rows, parse_failures, seen_real, per_root = [], [], {}, Counter()
+    rows, parse_failures, seen_real, per_root, hidden = [], [], {}, Counter(), []
     for root in a.roots:
         if not os.path.isdir(root):
             problems.append((root, 'root folder not found'))
@@ -601,7 +765,7 @@ def main(argv=None):
         if out_real == os.path.realpath(root) or out_real.startswith(os.path.realpath(root) + os.sep):
             notes.append(f'OUTDIR is inside root {root}: a later run over that root would read these copies again '
                          '(they would show up as byte-identical duplicates).')
-        for path in sorted(glob.glob(os.path.join(glob.escape(root), '**', 'result_*.json'), recursive=True)):
+        for path in find_result_files(root):
             if not os.path.isfile(path) or os.path.realpath(path).startswith(out_real + os.sep):
                 continue
             real = os.path.realpath(path)
@@ -610,6 +774,9 @@ def main(argv=None):
                 continue
             seen_real[real] = path
             per_root[root] += 1
+            if any(part.startswith('.') and part not in ('.', '..')
+                   for part in os.path.relpath(path, root).split(os.sep)[:-1]):
+                hidden.append(path)
             try:
                 with open(path, 'rb') as f:
                     raw = f.read()
@@ -621,7 +788,7 @@ def main(argv=None):
                 if not isinstance(data, dict):
                     raise ValueError('the file holds JSON but not an object')
             except (UnicodeDecodeError, ValueError, RecursionError) as e:
-                problems.append((path, f'cannot parse: {type(e).__name__}: {e}'))
+                problems.append((path, f'cannot parse: {type(e).__name__}: {short(e, 300)}'))
                 parse_failures.append((root, path, raw))
                 continue
             row = Row(root, path, raw, data)
@@ -629,6 +796,9 @@ def main(argv=None):
             for p in row.problems:
                 problems.append((path, p))
             rows.append(row)
+    if hidden:
+        notes.append(f'{len(hidden)} result file(s) lie under hidden folders (name starting with "."), e.g. `{hidden[0]}`; '
+                     'this tool reads them, summarize.py over the raw roots would not.')
 
     kept = [r for r in rows if r.category == 'kept']
     ignored = Counter()
@@ -644,13 +814,13 @@ def main(argv=None):
     better = [r for r in rows if r.better_why]
     suspects = []           # unparseable files that mention BETTER: kept as Row objects with empty data
     for root, path, raw in parse_failures:
-        if b'BETTER_CONFIGURATION_FOUND' in raw:
+        if BETTER.encode() in raw:
             m = re.search(rb'"n"\s*:\s*(\d+)', raw)
             s = Row(root, path, raw, {})
             s.n_guess = int(m.group(1)) if m else None
             suspects.append(s)
-    better_same_n = [r for r in better if r.get('n') == a.n]
-    suspect_same_n = [s for s in suspects if s.n_guess in (None, a.n)]
+    better_this_n = [r for r in better if r.affects_this_n]
+    suspect_this_n = [s for s in suspects if s.n_guess in (None, a.n)]
 
     # 5. duplicates and selection: one file per canonical key
     groups = {}
@@ -703,9 +873,10 @@ def main(argv=None):
 
     # 8. own coverage check
     valid_rows = [r for r in kept if r.valid]
-    trees = {c: Tree(c, [r for r in valid_rows if r.key[0] == c]) for c in ('boundary', 'vertices')}
+    better_keys = {r.key for r in kept if r.key is not None and r.better_why}
+    trees = {c: Tree(c, [r for r in valid_rows if r.key[0] == c], better_keys) for c in ('boundary', 'vertices')}
     cov = {c: trees[c].covered('[]', []) for c in trees}
-    certified = cov['boundary'] and cov['vertices'] and not better_same_n and not suspect_same_n
+    certified = cov['boundary'] and cov['vertices'] and not better_this_n and not suspect_this_n
 
     # 9. open leaves, unattached rows
     leaves = trees['boundary'].open_leaves() + trees['vertices'].open_leaves()
@@ -717,39 +888,35 @@ def main(argv=None):
                 unattached[(c, pkey)] = sum(len(v) for s in t.nodes[pkey].values() for v in s.values())
 
     # 10. plan
-    plan_nodes = make_plan(leaves, a.n, candidates, a.split_size)
+    plan_nodes = make_plan(leaves, trees, a.n, candidates, a.split_size)
     heil_dir = os.path.dirname(os.path.abspath(a.summarize)) if a.summarize else '/home/user/heil'
     hours_txt = repr(a.hours)
     for i, node in enumerate(plan_nodes, 1):
         node['label'] = f'{label_prefix}{i:02d}'
         node['batch_problem'] = batch_problem(node, a.n)
-        if a.hours > 5.5 and node['batch_problem'] is None:
-            node['batch_problem'] = 'hours > 5.5 (GitHub jobs stop at 6 h)'
+        if a.hours > GITHUB_MAX_HOURS and node['batch_problem'] is None:
+            node['batch_problem'] = f'hours > {GITHUB_MAX_HOURS} (GitHub jobs stop at 6 h)'
     plan = dict(n=a.n, target=a.target, hours=a.hours,
                 nodes=[dict(case=x['case'], prefix=x['prefix'], split=x['split'], parts=x['parts'],
-                            reason=x['reason'], best_bound=x['best_bound'], note=x['note']) for x in plan_nodes])
+                            reason=x['reason'], best_bound=x['best_bound'], note=x['note'], split_text=x['split_text'],
+                            label=x['label'], in_batch=x['batch_problem'] is None) for x in plan_nodes])
     with open(os.path.join(a.out, 'plan.json'), 'w') as f:
         json.dump(plan, f, indent=1)
     with open(os.path.join(a.out, 'open_leaves.json'), 'w') as f:
         json.dump([dict(case=lf['case'], region=lf['region'], reason=lf['reason'], parent_prefix=lf['parent'],
                         split=lf['split'], part=lf['part'], best_bound=lf['best'], runtime=lf['runtime'], file=lf['file'])
                    for lf in leaves], f, indent=1)
-    batch_nodes = [x for x in plan_nodes if x['batch_problem'] is None]
-    batches, cur, cur_jobs = [], [], 0          # chunks of at most 256 jobs (one batch run each)
-    for x in batch_nodes:
-        if cur and cur_jobs + len(x['parts']) > BATCH_MAX_JOBS:
-            batches.append(cur)
-            cur, cur_jobs = [], 0
-        entry = dict(prefix=x['prefix'], split=x['split'])
-        if x['parts'] != list(range(2 ** len(x['split']))):
-            entry['parts'] = x['parts']
-        cur.append(entry)
-        cur_jobs += len(x['parts'])
-    if cur:
-        batches.append(cur)
+    plan_groups = [('refine', 'Refinements of UNRESOLVED regions', [x for x in plan_nodes if x['reason'] == 'UNRESOLVED']),
+                   ('missing', 'Re-runs of MISSING parts', [x for x in plan_nodes if x['reason'] == 'MISSING'])]
+    drivers = {}            # group -> absolute path of its VM driver
+    for g, title, nodes in plan_groups:
+        if nodes:
+            drivers[g] = os.path.join(os.path.abspath(a.out), f'vm_{g}.sh')
+            with open(drivers[g], 'w') as f:
+                f.write(vm_driver(nodes, a.n, a.target, a.hours, heil_dir, title, now))
 
     # exit code
-    if better_same_n or suspect_same_n:
+    if better_this_n or suspect_this_n:
         code = 3
     elif problems:
         code = 2
@@ -770,13 +937,16 @@ def main(argv=None):
     P('')
     P('| Term | Meaning |')
     P('|---|---|')
-    P('| BETTER | Verdict BETTER_CONFIGURATION_FOUND: the solver\'s points, recomputed, have minimum area above the target |')
+    P('| BETTER | Verdict BETTER_CONFIGURATION_FOUND, or points whose recomputed minimum area is above the target |')
     P('| JSON | JavaScript Object Notation (format of the result files) |')
     P('| key | Canonical identity of a result: (case, sorted prefix, split in its order, part), texts without spaces |')
+    P('| MISSING | A part that was never run (or has only rejected rows); the plan re-runs it unchanged |')
     P('| node / region | A set of configurations, given by its prefix (triangles with a fixed orientation) |')
     P('| prefix | Orientations already fixed: list of [[i,j,k], sign], sign 1 = positive, 0 = negative |')
     P('| split | Triangles whose orientation is split on; part p fixes split[i] to sign (p >> i) & 1 |')
     P('| T+ / T- | Triangles whose orientation heil_tri.py fixes itself (always positive / negative) |')
+    P('| UNRESOLVED | A part the solver could not decide in its time; the plan splits it further |')
+    P('| UTC | Coordinated Universal Time |')
     P('| VM | Virtual Machine (the cloud session\'s 4-core computer) |')
     P('| zub | Upper bound on the minimum-area variable z in heil_tri.py; must be >= 0.5 for a valid proof |')
     P('')
@@ -787,21 +957,22 @@ def main(argv=None):
     for r in better:
         fails = []
         if r.category != 'kept':
-            fails.append({'other_n': f"different n ({r.get('n')})", 'other_target': f"different target ({r.get('cutoff')!r})",
+            fails.append({'other_n': f"different n ({r.get('n')!r})", 'other_target': f"different target ({r.get('cutoff')!r})",
                           'broken': 'n or cutoff unreadable'}[r.category])
         fails += r.problems + r.rejects
         own_cut = as_float(r.get('cutoff'))
         above = lambda c: 'above' if r.recomputed is not None and c is not None and r.recomputed > c else 'not above'
-        vs_target = (f', {above(a.target)} this run\'s target {a.target!r}' if r.get('n') == a.n and own_cut != a.target else '')
-        P(f"- **{r.get('case')} part {r.get('part')}**, n = {r.get('n')}, cutoff {r.get('cutoff')!r}: "
+        P(f"- **{r.get('case')} part {r.get('part')}**, n = {r.get('n')!r}, cutoff {r.get('cutoff')!r}: "
           f"value (objval) {r.get('objval')!r}, recomputed min area (file) {r.get('recomputed_min_area')!r}, "
-          f"recomputed here {r.recomputed!r} ({above(own_cut)} its cutoff{vs_target}).")
+          f"recomputed here {r.recomputed!r} from {r.n_points} point(s) ({above(own_cut)} its cutoff, "
+          f"{above(a.target)} this run's target {a.target!r}).")
         P(f"  - why BETTER: {'; '.join(r.better_why)}")
-        P(f"  - split `{r.get('split')}`, prefix `{short(r.get('prefix'), 200)}`")
-        P(f"  - points: `{compact(r.get('points'))}`")
+        P(f"  - concerns n = {a.n}: **{yn(r.affects_this_n)}**"
+          + ('' if r.affects_this_n else f" (its n is {r.get('n')!r} and its points do not beat this run's target)"))
+        P(f"  - split `{short(r.get('split'), 200)}`, prefix `{short(r.get('prefix'), 200)}`")
+        P(f"  - points: `{short(compact(r.get('points')), 2000)}`")
         P(f'  - file: `{r.path}`; copied to `{r.copied_to}`')
-        P(f"  - {'fails other checks: ' + '; '.join(fails) if fails else 'passes all other checks'}"
-          f"{'' if r.get('n') == a.n else ' (different n: does not affect this n)'}")
+        P(f"  - {'fails other checks: ' + '; '.join(fails) if fails else 'passes all other checks'}")
     for s in suspects:
         P(f'- **Unparseable file containing the text BETTER_CONFIGURATION_FOUND** (n looks like {s.n_guess}): `{s.path}`; '
           f'copied to `{s.copied_to}`. Inspect it by hand.')
@@ -816,7 +987,7 @@ def main(argv=None):
     P(f"| Boundary case covered | {yn(cov['boundary'])} | {tf(summ['boundary'])} |")
     P(f"| Corners (vertices) case covered | {yn(cov['vertices'])} | {tf(summ['corners'])} |")
     P(f"| Same n and target in the rows used | yes (only n = {a.n}, cutoff = {a.target!r}; zub >= {ZUB_MIN}) | {tf(summ['same'])} |")
-    P(f"| No BETTER row for n = {a.n} | {yn(not better_same_n and not suspect_same_n)} | - |")
+    P(f"| No BETTER row for n = {a.n} | {yn(not better_this_n and not suspect_this_n)} | - |")
     P(f"| **Overall** | **{'CERTIFIED' if certified else 'NOT CERTIFIED'}** | **{summ['verdict']}** |")
     P('')
     if summ['error']:
@@ -842,10 +1013,11 @@ def main(argv=None):
                           f'even a single part of a split corners run ({len(hole)} such row(s) here)')
         if any(r.key[0] == 'vertices' and r.key[1] == '[]' and r.get('prefix') != '[]' for r in valid_rows):
             causes.append('a corners row with an empty prefix written other than exactly "[]" (summarize.py compares the text)')
-        if any(r.category == 'kept' and r.get('n') == a.n for r in better) and not certified:
+        if any(r.category == 'kept' and not r.problems and r.verdict == BETTER for r in better_this_n):
             causes.append('BETTER rows block this tool\'s certificate')
-        if any(r.category != 'kept' and r.get('n') == a.n for r in better):
-            causes.append('a BETTER row for another target was not given to summarize.py but blocks this tool')
+        if any(not (r.category == 'kept' and not r.problems and r.verdict == BETTER) for r in better_this_n):
+            causes.append('a BETTER row for another target or n, with malformed fields, or whose points beat the target '
+                          'under another verdict was not given to summarize.py as BETTER, but blocks this tool')
         if cov['boundary'] and trees['boundary'].max_depth() > 20:
             causes.append('the proof tree is deeper than 20 levels, where summarize.py stops looking')
         dup_groups = [k for k, v in groups.items() if len(v) > 1]
@@ -877,7 +1049,7 @@ def main(argv=None):
       f'copied into OUTDIR: {len(chosen)} (one per key) + BETTER copies')
     for reason, cnt in sorted(ignored.items()):
         P(f'- ignored, {reason}: {cnt}')
-    P(f"- verdicts of kept rows: {dict(Counter(r.verdict for r in kept))}")
+    P(f"- verdicts of kept rows: {dict(Counter(str(r.verdict) for r in kept))}")
     for x in notes:
         P(f'- note: {x}')
     P('')
@@ -886,7 +1058,7 @@ def main(argv=None):
     rej = [r for r in kept if r.rejects]
     P(f'Rejected for proof ({len(rej)}; reported but never counted as PROVED):')
     for r in rej:
-        P(f"- `{r.path}` ({r.get('case')} part {r.get('part')}, verdict {r.verdict}): {'; '.join(r.rejects)}")
+        P(f"- `{r.path}` ({r.get('case')} part {r.get('part')}, verdict {r.verdict!r}): {'; '.join(r.rejects)}")
     warned = [r for r in kept if r.warnings]
     P('')
     P(f'Triangle warnings ({len(warned)} row(s); these rows still count, because heil_tri.py then solves a larger region):')
@@ -928,9 +1100,9 @@ def main(argv=None):
     if not leaves:
         P('None: both trees are fully covered.')
     else:
-        P(f"{sum(lf['reason'] == 'UNRESOLVED' for lf in leaves)} UNRESOLVED and {sum(lf['reason'] == 'MISSING' for lf in leaves)} "
-          'MISSING leaves. MISSING parts of one split are grouped on one line; every leaf with its full region prefix '
-          'is in `open_leaves.json`.')
+        cnt = Counter(lf['reason'] for lf in leaves)
+        P(f"{cnt['UNRESOLVED']} UNRESOLVED, {cnt['MISSING']} MISSING and {cnt['BETTER']} BETTER leaves. MISSING parts of one "
+          'split are grouped on one line; every leaf with its full region prefix is in `open_leaves.json`.')
         P('')
     shown = set()
     for lf in leaves:
@@ -945,6 +1117,10 @@ def main(argv=None):
                      and (x['case'], compact(x['parent']), compact(x['split'])) == group]
             P(f"- {lf['case']} **MISSING**: parts {ranges(parts)} of split `{group[2]}` at prefix `{short(group[1], 120)}` "
               '(never run, or only rejected rows)')
+        elif lf['reason'] == 'BETTER':
+            P(f"- {lf['case']} **BETTER**: part {lf['part']} of split `{compact(lf['split'])}` at prefix "
+              f"`{short(compact(lf['parent']), 120)}`: a row here reports a configuration above the target (section 1). "
+              'Not planned: verify it with verify_config.py first; refining it cannot succeed if it is genuine.')
         else:
             rt = '' if lf['runtime'] is None else f", runtime {lf['runtime']:.0f} s"
             P(f"- {lf['case']} **UNRESOLVED**: part {lf['part']} of split `{compact(lf['split'])}` at prefix "
@@ -959,81 +1135,139 @@ def main(argv=None):
     P('## 8. Plan for the next runs')
     P('')
     if not plan_nodes:
-        P('Nothing to run.')
+        P('Nothing to run.' + (' (BETTER leaves are not planned; see section 7.)' if any(
+            lf['reason'] == 'BETTER' for lf in leaves) else ''))
     else:
         n_jobs = sum(len(x['parts']) for x in plan_nodes)
-        P(f'{len(plan_nodes)} region(s), {n_jobs} job(s) in total, {hours_txt} h each. Written to `plan.json`.')
+        P(f'{len(plan_nodes)} region(s), {n_jobs} job(s) in total, {hours_txt} h each. Written to `plan.json`. '
+          'Two groups: **refinements** of UNRESOLVED regions, and **re-runs** of MISSING parts.')
+        if any(lf['reason'] == 'BETTER' for lf in leaves):
+            P('BETTER leaves (section 7) are not in the plan.')
         if any(x['reason'] == 'MISSING' for x in plan_nodes):
             P('MISSING parts may simply still be running (for example in a GitHub run whose results have not landed '
-              'yet): check that before starting them again.')
+              'yet): check that before starting the re-runs.')
         P('')
-        P('### (a) Batch workflow (heilbronn-batch): paste into the input "nodes"')
+        P('### (a) Batch workflow (heilbronn-batch): paste ONE value into the input "nodes" per run')
         P('')
-        if batches:
-            for i, b in enumerate(batches, 1):
+        for g, title, nodes in plan_groups:
+            if not nodes:
+                continue
+            ok = [x for x in nodes if x['batch_problem'] is None]
+            P(f'**{title}** ({len(nodes)} region(s), {sum(len(x["parts"]) for x in nodes)} job(s)):')
+            P('')
+            chunks = batch_chunks(ok)
+            for i, b in enumerate(chunks, 1):
                 jobs = sum(len(e.get('parts', range(2 ** len(e['split'])))) for e in b)
-                P(f'Batch run {i} of {len(batches)} ({jobs} jobs; also set n = {a.n}, target = {a.target!r}, hours = {hours_txt}):')
+                P(f'{title}, batch run {i} of {len(chunks)} ({jobs} jobs; also set n = {a.n}, target = {a.target!r}, '
+                  f'hours = {hours_txt}):')
                 P('')
                 P('```')
                 P(compact(b))
                 P('```')
                 P('')
-        else:
-            P('No region of this plan can go into the batch workflow (see below).')
-            P('')
-        excluded = [x for x in plan_nodes if x['batch_problem']]
-        if excluded:
-            P('Not in the batch value (use the classic workflow or the VM):')
-            for x in excluded:
-                P(f"- {x['label']}: {x['batch_problem']}")
-            P('')
-        P('### (b) Classic workflow (heilbronn-certify), one run per region')
+            excluded = [x for x in nodes if x['batch_problem']]
+            if excluded:
+                P('Not in the batch value' + (' (none of this group can go there)' if not chunks else '') +
+                  '; use the classic workflow or the VM:')
+                for x in excluded:
+                    P(f"- {x['label']}: {x['batch_problem']}")
+                P('')
+        P('### (b) Classic workflow (heilbronn-certify), one dispatch per block')
         P('')
-        for x in plan_nodes:
+        root_never = next((x for x in plan_nodes if x['case'] == 'boundary' and x['reason'] == 'MISSING'
+                           and x['prefix'] == [] and x['note'].startswith('boundary case never run')), None)
+        corners_unsplit = next((x for x in plan_nodes if x['case'] == 'vertices' and not x['split'] and not x['prefix']), None)
+        root_proved = [r for rs in trees['boundary'].nodes.get('[]', {}).values() for part_rows in rs.values()
+                       for r in part_rows if r.verdict == 'PROVED' and SAFE_SPLIT_TEXT.fullmatch(r.get('split'))]
+        fastest = min(root_proved, key=lambda r: (as_float(r.get('runtime')), r.path)) if root_proved else None
+        if a.hours > GITHUB_MAX_HOURS:
+            P(f'Not possible with --hours {hours_txt}: heilbronn.yml stops every job after 358 minutes, so the solver '
+              f'result would be lost. Run this tool again with --hours {GITHUB_MAX_HOURS} (or less), or use the VM (c).')
+            P('')
+        for x in (plan_nodes if a.hours <= GITHUB_MAX_HOURS else []):
             bound_txt = '' if x['best_bound'] is None else f", best bound so far {x['best_bound']!r}"
             P(f"**{x['label']}** - {x['case']}, {x['reason']}{bound_txt}; {x['note']}; parts {ranges(x['parts'])}")
             P('')
             if x['case'] == 'boundary':
-                P('```')
-                P(f'n: {a.n}')
-                P(f'target: {a.target!r}')
-                P(f"split: {compact(x['split'])}")
-                P(f"parts: {compact(x['parts'])}")
-                P(f"prefix: {compact(x['prefix'])}")
-                P('run_vertices: false')
-                P(f'hours: {hours_txt}')
-                P('```')
-            elif not x['split'] and not x['prefix']:
-                P('Classic workflow: run it with run_vertices = true (its corners job is unsplit).')
+                chunks = [x['parts'][i:i + GITHUB_MAX_JOBS] for i in range(0, len(x['parts']), GITHUB_MAX_JOBS)]
+                if len(chunks) > 1:
+                    P(f'{len(x["parts"])} parts: GitHub allows at most {GITHUB_MAX_JOBS} jobs per dispatch, '
+                      f'so this region needs {len(chunks)} dispatches.')
+                    P('')
+                if x['split_text'] != compact(x['split']):
+                    P('Type the split exactly as shown, with its spaces, so that summarize.py combines the re-run '
+                      'with the parts already run.')
+                    P('')
+                with_corners = x is root_never and corners_unsplit is not None
+                for i, chunk in enumerate(chunks, 1):
+                    if len(chunks) > 1:
+                        P(f'Dispatch {i} of {len(chunks)}:')
+                        P('')
+                    P('```')
+                    P(f'n: {a.n}')
+                    P(f'target: {a.target!r}')
+                    P(f"split: {x['split_text']}")
+                    P(f"parts: {compact(chunk)}")
+                    P(f"prefix: {compact(x['prefix'])}")
+                    P(f"run_vertices: {'true' if with_corners and i == 1 else 'false'}")
+                    P(f'hours: {hours_txt}')
+                    P('```')
+                    P('')
+            elif x is corners_unsplit:
+                if root_never is not None:
+                    P(f"Set run_vertices: true in the (first) dispatch of {root_never['label']} (shown there): it runs "
+                      'the corners case once, unsplit.')
+                elif fastest is not None:
+                    P('The classic workflow always runs its boundary job as well, from "split" and "parts". The block '
+                      f"below therefore also re-runs boundary part {fastest.get('part')} of the root split, already "
+                      f"PROVED in {as_float(fastest.get('runtime')):.0f} s (`{fastest.path}`), so that job ends quickly.")
+                    P('')
+                    P('```')
+                    P(f'n: {a.n}')
+                    P(f'target: {a.target!r}')
+                    P(f"split: {fastest.get('split')}")
+                    P(f"parts: [{fastest.get('part')}]")
+                    P('prefix: []')
+                    P('run_vertices: true')
+                    P(f'hours: {hours_txt}')
+                    P('```')
+                else:
+                    P('Classic workflow: its boundary job always runs too, and no quick PROVED boundary part is known '
+                      'to pair it with; use the VM (c).')
+                P('')
             else:
-                P('Classic workflow: not possible (its corners job cannot take a split or prefix); use the VM command below.')
+                P('Classic workflow: not possible (its corners job cannot take a split or prefix); use the VM (c).')
+                P('')
+        P('### (c) VM: one driver script per group')
+        P('')
+        P('Each driver runs its regions **one after another** with run_parts.sh (every region uses all cores). '
+          'Before each region it waits until no heil_tri.py process is running on the machine (also other '
+          'experiments), and a lock makes a second driver wait until the first one has finished. A region whose '
+          'results/cloud/<label>/DONE exists is skipped, so a driver can simply be started again. '
+          'Start a driver with the ONE line below; do not paste the run_parts.sh lines of the driver one by one '
+          '(each returns at once and starts its job in the background, so all regions would run at the same time).')
+        P('')
+        for g, title, nodes in plan_groups:
+            if not nodes:
+                continue
+            log = drivers[g][:-3] + '.log'
+            P(f'**{title}** ({len(nodes)} region(s), {sum(len(x["parts"]) for x in nodes)} part(s) of {hours_txt} h, '
+              f'one after another){": only if these parts are not still running elsewhere" if g == "missing" else ""}:')
             P('')
-        P('### (c) VM commands')
-        P('')
-        P('Run them in the folder that holds run_parts.sh. Each command starts a background job that runs its parts '
-          'one after another on all cores, then writes results/cloud/<label>/DONE; start the next command only after '
-          'that DONE file exists, so that jobs do not compete for the cores.')
-        P('')
-        P('```')
-        P(f'cd {heil_dir}')
-        secs = int(a.hours * 3600)
-        for x in plan_nodes:
-            lab = x['label']
-            if x['case'] == 'boundary':
-                P(f"bash run_parts.sh {lab} {a.n} {a.target!r} '{compact(x['split'])}' '{compact(x['prefix'])}' "
-                  f"{hours_txt} {' '.join(map(str, x['parts']))}")
-            elif not x['split'] and not x['prefix']:
-                P(f"bash run_parts.sh {lab} {a.n} {a.target!r} '[]' '[]' {hours_txt} vertices")
-            else:   # split corners case: run_parts.sh cannot do it, so call heil_tri.py directly
-                P(f"mkdir -p results/cloud/{lab} && nohup bash -c 'for p in {' '.join(map(str, x['parts']))}; do "
-                  f"python3 heil_tri.py --n {a.n} --case vertices --cutoff {a.target!r} --split \"{compact(x['split'])}\" "
-                  f"--part $p --prefix \"{compact(x['prefix'])}\" --threads $(nproc) --timelimit {secs} "
-                  f"--out results/cloud/{lab}/result_vertices_$p.json > results/cloud/{lab}/log_vertices_$p.txt 2>&1; done; "
-                  f"echo ALL_DONE > results/cloud/{lab}/DONE' > /dev/null 2>&1 &")
-        P('```')
+            P('```')
+            P(f'nohup bash {shlex.quote(drivers[g])} > {shlex.quote(log)} 2>&1 &')
+            P('```')
+            P('')
+            P(f'Progress: `cat {log}` (one line per region start and end, ALL_DONE at the end). '
+              f'Driver `{drivers[g]}`:')
+            P('')
+            P('```bash')
+            with open(drivers[g]) as f:
+                P(f.read().rstrip('\n'))
+            P('```')
+            P('')
         clash = [x['label'] for x in plan_nodes if os.path.exists(os.path.join(heil_dir, 'results', 'cloud', x['label']))]
         if clash:
-            P('')
             P(f'**Warning: result folders already exist for labels {clash}; choose another --label-prefix.**')
     P('')
     P('## 9. All kept rows')
@@ -1043,7 +1277,7 @@ def main(argv=None):
     for r in sorted(kept, key=lambda r: (r.key or ('~',), r.path)):
         use = 'copied' if r.copied_to else ('rejected' if r.rejects or r.problems else 'duplicate')
         rt = as_float(r.get('runtime'))
-        P(f"| {r.get('case')} | `{short(r.key[1] if r.key else r.get('prefix'), 50)}` | `{r.key[2] if r.key else r.get('split')}` | "
+        P(f"| {r.get('case')} | `{short(r.key[1] if r.key else r.get('prefix'), 50)}` | `{r.key[2] if r.key else short(r.get('split'), 50)}` | "
           f"{r.get('part')} | {r.verdict} | {r.get('status')} | {'-' if rt is None else f'{rt:.0f}'} | {r.get('objbound')} | "
           f"{r.get('objval')} | {use} | `{r.path}` |")
     report = '\n'.join(L) + '\n'
@@ -1051,6 +1285,44 @@ def main(argv=None):
         f.write(report)
     print(report)
     return code
+
+
+def emergency_scan(argv):
+    """After a crash: list result files under the roots that contain the text BETTER_CONFIGURATION_FOUND."""
+    try:
+        i = argv.index('--roots')
+    except ValueError:
+        return []
+    roots = []
+    for x in argv[i + 1:]:
+        if x.startswith('--'):
+            break
+        roots.append(x)
+    found = []
+    for root in roots:
+        for path in find_result_files(root) if os.path.isdir(root) else []:
+            try:
+                with open(path, 'rb') as f:
+                    if BETTER.encode() in f.read():
+                        found.append(path)
+            except OSError:
+                pass
+    return found
+
+
+def main(argv=None):
+    """run() with a safety net: an unexpected error gives exit code 2 (never 1 = 'not certified'), or 3 if a
+    result file under the roots mentions BETTER_CONFIGURATION_FOUND."""
+    argv = sys.argv[1:] if argv is None else argv
+    try:
+        return run(argv)
+    except Exception:                       # noqa: BLE001 - report every internal error the same way
+        traceback.print_exc()
+        print('\nINTERNAL ERROR: combine_plan_260927.py crashed; nothing it printed is a certificate.', file=sys.stderr)
+        found = emergency_scan(argv)
+        for path in found:
+            print(f'BETTER_CONFIGURATION_FOUND appears in {path}: check it with verify_config.py.', file=sys.stderr)
+        return 3 if found else 2
 
 
 if __name__ == '__main__':
