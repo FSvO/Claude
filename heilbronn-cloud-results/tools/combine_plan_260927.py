@@ -900,6 +900,9 @@ def main(argv=None):
     P('')
     P(f'Duplicate keys: {len(dups)}. Of these, {len(identical)} have only byte-identical copies (the same result saved '
       f'in several places; harmless), {len(differing)} have different contents:')
+    if identical:
+        example = identical[sorted(identical)[0]]
+        P(f"- example of byte-identical copies: {' = '.join(f'`{r.path}`' for r in example)}")
     for k, v in sorted(differing.items()):
         pick = next((r.path for r in v if id(r) in chosen_ids), 'none (no valid row)')
         P(f"- {k[0]} prefix `{short(k[1], 80)}` split `{k[2]}` part {k[3]}: "
