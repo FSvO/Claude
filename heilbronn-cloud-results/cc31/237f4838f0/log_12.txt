@@ -90,3 +90,20 @@ H124920 87413                       0.0000011    0.03926      -  24.7   22s
  255002 174441    0.01531   29   48    0.00000    0.03631      -  23.1   45s
  288354 196775    0.00732   38   39    0.00000    0.03573      -  22.8   50s
  317160 214345    0.01254   27   46    0.00000    0.03517      -  22.6   55s
+ 343448 230512    0.01483   33   51    0.00000    0.03481      -  22.5   60s
+
+Cutting planes:
+  Gomory: 5
+  Implied bound: 2
+  RLT: 48
+  Relax-and-lift: 1
+  BQP: 17
+
+Explored 343709 nodes (7723455 simplex iterations) in 60.00 seconds (84.43 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 1.07647e-06 8.08707e-07 7.93281e-07 ... 7.31202e-08
+
+Time limit reached
+Best objective 1.076472648603e-06, best bound 3.479617356028e-02, gap 3232325.2368%
+{"verdict": "UNRESOLVED", "status": "TIME_LIMIT", "runtime": 60.00476002693176, "objval": 1.0764726486034437e-06, "objbound": 0.03479617356027586, "binaries": 34}
