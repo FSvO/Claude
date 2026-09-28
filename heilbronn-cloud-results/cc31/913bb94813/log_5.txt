@@ -1,0 +1,84 @@
+Set parameter NodefileStart to value 6
+Read parameters from file gurobi.env
+Restricted license - for non-production use only - expires 2027-11-29
+Set parameter OutputFlag to value 1
+Set parameter Threads to value 4
+Set parameter TimeLimit to value 60
+Set parameter MIPGap to value 5e-05
+Set parameter MIPFocus to value 2
+Set parameter NonConvex to value 2
+Set parameter BestBdStop to value 2.7426211734693878e-02
+Gurobi Optimizer version 13.0.3 build v13.0.3rc0 (linux64 - "Ubuntu 24.04.4 LTS")
+
+CPU model: Intel(R) Xeon(R) Processor @ 2.10GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 4 physical cores, 4 logical processors, using up to 4 threads
+
+Non-default parameters:
+TimeLimit  60
+BestBdStop  2.7426211734693878e-02
+MIPGap  5e-05
+MIPFocus  2
+NodefileStart  6
+NonConvex  2
+Threads  4
+
+Optimize a model with 137 rows, 107 columns and 774 nonzeros (Max)
+Model fingerprint: 0xed196519
+Model has 1 linear objective coefficients
+Model has 50 quadratic constraints
+Variable types: 65 continuous, 42 integer (42 binary)
+Coefficient statistics:
+  Matrix range     [5e-01, 1e+00]
+  QMatrix range    [1e+00, 1e+00]
+  QLMatrix range   [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  Bounds range     [5e-01, 1e+00]
+  RHS range        [1e+00, 1e+00]
+
+Found heuristic solution: objective -0.0000000
+Presolve time: 0.00s
+Presolved: 337 rows, 108 columns, 1174 nonzeros
+Presolved model has 50 bilinear constraint(s)
+
+Solving non-convex MIQCP to global optimality
+
+Variable types: 66 continuous, 42 integer (42 binary)
+Found heuristic solution: objective 0.0000000
+Root relaxation presolve removed 72 rows and 12 columns
+Root relaxation presolved: 265 rows, 96 columns, 992 nonzeros
+
+
+Root relaxation: objective 1.666667e-01, 95 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0    0.16667    0   50    0.00000    0.16667      -     -    0s
+     0     0    0.08333    0   63    0.00000    0.08333      -     -    0s
+     0     0    0.08333    0   62    0.00000    0.08333      -     -    0s
+     0     0    0.07845    0   47    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   47    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   46    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   46    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   46    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   46    0.00000    0.07845      -     -    0s
+     0     0    0.07845    0   46    0.00000    0.07845      -     -    0s
+     0     2    0.07845    0   46    0.00000    0.07845      -     -    0s
+*  879   790              69       0.0000000    0.07845      -  15.8    0s
+*  889   787              73       0.0000000    0.07845      -  15.7    0s
+H 1072   881                       0.0000003    0.07692      -  16.3    0s
+H 1140   877                       0.0000005    0.07692      -  16.4    0s
+* 4345  2663             130       0.0000009    0.04335      -  17.0    1s
+H 5531  3437                       0.0000012    0.04335      -  16.7    1s
+H 6518  4246                       0.0000012    0.04335      -  17.0    2s
+ 19415 12987    0.00008   34   31    0.00000    0.04300      -  17.2    5s
+H19426 12969                       0.0000013    0.04300      -  17.2    5s
+H35861 24091                       0.0000014    0.03952      -  17.5    8s
+H36011 24122                       0.0000015    0.03952      -  17.4    9s
+ 42181 28268    0.00007   54   50    0.00000    0.03862      -  17.6   10s
+ 69605 46683     cutoff   74         0.00000    0.03552      -  17.4   15s
+ 99511 66651    0.00010   46   50    0.00000    0.03364      -  17.5   20s
+ 127690 86213 infeasible   97         0.00000    0.03241      -  17.6   25s
+ 156968 105548    0.02968   35   53    0.00000    0.03150      -  17.5   30s
+ 182603 122778    0.00365   32   45    0.00000    0.03092      -  17.6   35s
+ 204730 137245    0.00203   51   42    0.00000    0.03033      -  17.6   40s
