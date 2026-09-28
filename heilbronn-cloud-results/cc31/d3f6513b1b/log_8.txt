@@ -82,3 +82,24 @@ H55722 35894                       0.0000008    0.03909      -  22.8   12s
  183716 114675    0.02053   36   54    0.00000    0.03538      -  22.4   35s
  208999 129673     cutoff   77         0.00000    0.03495      -  22.5   40s
  233360 144003    0.00003   65   50    0.00000    0.03459      -  22.5   45s
+ 257954 158352    0.00905   37   43    0.00000    0.03424      -  22.5   50s
+ 283950 173583    0.02292   37   55    0.00000    0.03387      -  22.6   55s
+ 306594 187273    0.00000   54   37    0.00000    0.03362      -  22.6   60s
+
+Cutting planes:
+  Gomory: 8
+  Implied bound: 24
+  MIR: 5
+  Flow cover: 33
+  RLT: 68
+  Relax-and-lift: 6
+  BQP: 23
+
+Explored 307056 nodes (6946044 simplex iterations) in 60.00 seconds (82.79 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 9: 8.1473e-07 7.47606e-07 4.97826e-07 ... -0
+
+Time limit reached
+Best objective 8.147303790368e-07, best bound 3.361804869298e-02, gap -
+{"verdict": "UNRESOLVED", "status": "TIME_LIMIT", "runtime": 60.00303316116333, "objval": 8.147303790367879e-07, "objbound": 0.03361804869298446, "binaries": 42}
