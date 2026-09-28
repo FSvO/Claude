@@ -86,3 +86,26 @@ H42007 26052                       0.0000008    0.03875      -  29.2    9s
  123720 71072    0.00080   35   35    0.00000    0.03321      -  30.4   25s
  149317 85349     cutoff   69         0.00000    0.03245      -  30.4   30s
  173995 99076    0.00346   39   46    0.00000    0.03198      -  30.6   35s
+ 196613 111558    0.00099   40   42    0.00000    0.03155      -  30.7   40s
+ 222518 125138     cutoff   64         0.00000    0.03107      -  30.8   45s
+ 246824 139225    0.00000   52   44    0.00000    0.03068      -  31.0   50s
+ 272759 153507    0.00009   39   45    0.00000    0.03035      -  31.0   55s
+ 298178 166695    0.02333   30   50    0.00000    0.03006      -  31.1   60s
+
+Cutting planes:
+  Gomory: 4
+  Implied bound: 8
+  MIR: 4
+  Flow cover: 33
+  RLT: 89
+  Relax-and-lift: 4
+  BQP: 18
+
+Explored 298453 nodes (9279177 simplex iterations) in 60.00 seconds (77.72 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 7.67438e-07 6.30683e-07 6.30292e-07 ... 2.61321e-08
+
+Time limit reached
+Best objective 7.674380309020e-07, best bound 3.006058839810e-02, gap -
+{"verdict": "UNRESOLVED", "status": "TIME_LIMIT", "runtime": 60.00217604637146, "objval": 7.67438030901957e-07, "objbound": 0.030060588398098463, "binaries": 34}
