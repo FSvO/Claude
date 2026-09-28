@@ -1,0 +1,91 @@
+Set parameter NodefileStart to value 6
+Read parameters from file gurobi.env
+Restricted license - for non-production use only - expires 2027-11-29
+Set parameter OutputFlag to value 1
+Set parameter Threads to value 4
+Set parameter TimeLimit to value 60
+Set parameter MIPGap to value 5e-05
+Set parameter MIPFocus to value 2
+Set parameter NonConvex to value 2
+Set parameter BestBdStop to value 2.7426211734693878e-02
+Gurobi Optimizer version 13.0.3 build v13.0.3rc0 (linux64 - "Ubuntu 24.04.4 LTS")
+
+CPU model: Intel(R) Xeon(R) Processor @ 2.10GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 4 physical cores, 4 logical processors, using up to 4 threads
+
+Non-default parameters:
+TimeLimit  60
+BestBdStop  2.7426211734693878e-02
+MIPGap  5e-05
+MIPFocus  2
+NodefileStart  6
+NonConvex  2
+Threads  4
+
+Optimize a model with 125 rows, 95 columns and 686 nonzeros (Max)
+Model fingerprint: 0xafec9e22
+Model has 1 linear objective coefficients
+Model has 50 quadratic constraints
+Variable types: 65 continuous, 30 integer (30 binary)
+Coefficient statistics:
+  Matrix range     [5e-01, 1e+00]
+  QMatrix range    [1e+00, 1e+00]
+  QLMatrix range   [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  Bounds range     [5e-01, 1e+00]
+  RHS range        [1e+00, 1e+00]
+
+Found heuristic solution: objective -0.0000000
+Presolve time: 0.00s
+Presolved: 325 rows, 96 columns, 1086 nonzeros
+Presolved model has 50 bilinear constraint(s)
+
+Solving non-convex MIQCP to global optimality
+
+Variable types: 66 continuous, 30 integer (30 binary)
+Root relaxation presolve removed 50 rows and 1 columns
+Root relaxation presolved: 275 rows, 95 columns, 1036 nonzeros
+
+
+Root relaxation: objective 8.333333e-02, 125 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0    0.08333    0   59   -0.00000    0.08333      -     -    0s
+     0     0    0.08333    0   59   -0.00000    0.08333      -     -    0s
+     0     0    0.06250    0   58   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   56   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   56   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   54   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   55   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   56   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   56   -0.00000    0.06250      -     -    0s
+     0     2    0.06250    0   56   -0.00000    0.06250      -     -    0s
+*  304   304              45       0.0000000    0.06250      -  28.0    0s
+H  412   410                       0.0000000    0.06250      -  26.5    0s
+H  668   614                       0.0000000    0.06250      -  26.8    0s
+H  700   614                       0.0000000    0.06250      -  26.7    0s
+H 1175   977                       0.0000005    0.04415      -  30.8    0s
+ 21364 13858     cutoff   34         0.00000    0.03335      -  29.1    5s
+ 47576 30436    0.00000   77   29    0.00000    0.03030      -  31.2   10s
+*59568 37481              55       0.0000005    0.02944      -  31.6   12s
+H61455 38620                       0.0000006    0.02931      -  31.9   12s
+ 73370 45169    0.00119   40   50    0.00000    0.02858      -  31.8   15s
+ 98638 59856    0.00295   30   52    0.00000    0.02745      -  31.9   20s
+
+Cutting planes:
+  Gomory: 9
+  MIR: 1
+  Flow cover: 3
+  RLT: 55
+  BQP: 10
+
+Explored 100067 nodes (3195272 simplex iterations) in 20.26 seconds (26.71 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 8: 5.54776e-07 4.8153e-07 4.80424e-07 ... -0
+
+Optimization achieved user objective limit
+Best objective 5.547762933522e-07, best bound 2.742118093846e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 20.256175994873047, "objval": 5.547762933521596e-07, "objbound": 0.02742118093845837, "binaries": 30}
