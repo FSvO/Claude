@@ -23,7 +23,7 @@ NonConvex  2
 Threads  4
 
 Optimize a model with 133 rows, 103 columns and 742 nonzeros (Max)
-Model fingerprint: 0xa2fc7b57
+Model fingerprint: 0xd9b69025
 Model has 1 linear objective coefficients
 Model has 50 quadratic constraints
 Variable types: 65 continuous, 38 integer (38 binary)
@@ -47,49 +47,46 @@ Root relaxation presolve removed 50 rows and 1 columns
 Root relaxation presolved: 283 rows, 103 columns, 1092 nonzeros
 
 
-Root relaxation: objective 8.333333e-02, 118 iterations, 0.00 seconds (0.00 work units)
+Root relaxation: objective 8.333333e-02, 136 iterations, 0.00 seconds (0.00 work units)
 
     Nodes    |    Current Node    |     Objective Bounds      |     Work
  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
      0     0    0.08333    0   49   -0.00000    0.08333      -     -    0s
-     0     0    0.07143    0   58   -0.00000    0.07143      -     -    0s
-     0     0    0.07143    0   57   -0.00000    0.07143      -     -    0s
-     0     0    0.06250    0   47   -0.00000    0.06250      -     -    0s
+     0     0    0.06522    0   59   -0.00000    0.06522      -     -    0s
+     0     0    0.06250    0   58   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   56   -0.00000    0.06250      -     -    0s
      0     0    0.06250    0   49   -0.00000    0.06250      -     -    0s
-     0     0    0.06250    0   50   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   51   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   53   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   46   -0.00000    0.06250      -     -    0s
      0     0    0.06250    0   49   -0.00000    0.06250      -     -    0s
-     0     0    0.06250    0   49   -0.00000    0.06250      -     -    0s
-     0     0    0.06250    0   50   -0.00000    0.06250      -     -    0s
-     0     0    0.06250    0   50   -0.00000    0.06250      -     -    0s
-     0     2    0.06250    0   50   -0.00000    0.06250      -     -    0s
-H  382   392                       0.0000001    0.06250      -  13.2    0s
-H  681   655                       0.0000002    0.06250      -  13.1    0s
-H  931   864                       0.0000002    0.06250      -  13.7    0s
-H 1084   941                       0.0000002    0.06250      -  13.5    0s
-H 1094   899                       0.0000007    0.04815      -  13.3    0s
-* 5239  3357              62       0.0000009    0.03944      -  18.6    1s
-H 6333  3941                       0.0000010    0.03743      -  20.2    1s
-H 6864  4448                       0.0000010    0.03669      -  20.3    2s
-H19672 13355                       0.0000013    0.03139      -  21.8    4s
- 21463 14838    0.00000   81   37    0.00000    0.03080      -  22.3    5s
-H29665 19674                       0.0000014    0.02917      -  22.6    6s
-H30255 20131                       0.0000016    0.02912      -  22.7    6s
+     0     0    0.06250    0   52   -0.00000    0.06250      -     -    0s
+     0     0    0.06250    0   52   -0.00000    0.06250      -     -    0s
+     0     2    0.06250    0   52   -0.00000    0.06250      -     -    0s
+H  279   302                       0.0000001    0.06250      -  16.0    0s
+*  744   731              85       0.0000001    0.06250      -  16.6    0s
+H 1183   964                       0.0000001    0.06140      -  17.4    0s
+H 1187   918                       0.0000002    0.06140      -  17.4    0s
+H 1189   873                       0.0000003    0.06140      -  17.3    0s
+H 1931  1131                       0.0000003    0.03165      -  25.8    1s
+H 2229  1327                       0.0000004    0.03165      -  27.2    1s
+H 3276  1790                       0.0000006    0.03165      -  24.6    1s
 
 Cutting planes:
-  Gomory: 12
-  Implied bound: 1
-  MIR: 2
-  Flow cover: 19
-  RLT: 55
+  Gomory: 26
+  Implied bound: 2
+  MIR: 3
+  Flow cover: 11
+  RLT: 63
   Relax-and-lift: 3
-  BQP: 9
+  BQP: 5
 
-Explored 44939 nodes (1059858 simplex iterations) in 9.23 seconds (10.66 work units)
+Explored 14743 nodes (473926 simplex iterations) in 4.47 seconds (5.27 work units)
 Thread count was 4 (of 4 available processors)
 
-Solution count 9: 1.59711e-06 1.40756e-06 1.34887e-06 ... -0
+Solution count 9: 6.45819e-07 3.52029e-07 3.02468e-07 ... -0
 
 Optimization achieved user objective limit
-Best objective 1.597107314968e-06, best bound 2.737940160855e-02, gap 1714211.9534%
-{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 9.231180191040039, "objval": 1.597107314967904e-06, "objbound": 0.027379401608549403, "binaries": 38}
+Best objective 6.458188025275e-07, best bound 2.732841557619e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 4.468339920043945, "objval": 6.458188025275126e-07, "objbound": 0.02732841557618883, "binaries": 38}
