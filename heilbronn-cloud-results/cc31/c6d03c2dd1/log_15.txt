@@ -23,7 +23,7 @@ NonConvex  2
 Threads  4
 
 Optimize a model with 125 rows, 95 columns and 686 nonzeros (Max)
-Model fingerprint: 0x6eda9d82
+Model fingerprint: 0x98071196
 Model has 1 linear objective coefficients
 Model has 50 quadratic constraints
 Variable types: 65 continuous, 30 integer (30 binary)
@@ -47,42 +47,42 @@ Root relaxation presolve removed 50 rows and 1 columns
 Root relaxation presolved: 275 rows, 95 columns, 1036 nonzeros
 
 
-Root relaxation: objective 8.333333e-02, 127 iterations, 0.00 seconds (0.00 work units)
+Root relaxation: objective 8.333333e-02, 131 iterations, 0.00 seconds (0.00 work units)
 
     Nodes    |    Current Node    |     Objective Bounds      |     Work
  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
-     0     0    0.08333    0   48   -0.00000    0.08333      -     -    0s
-     0     0    0.06122    0   50   -0.00000    0.06122      -     -    0s
-     0     0    0.06098    0   52   -0.00000    0.06098      -     -    0s
-     0     0    0.06098    0   50   -0.00000    0.06098      -     -    0s
-     0     0    0.06061    0   50   -0.00000    0.06061      -     -    0s
-     0     0    0.06034    0   50   -0.00000    0.06034      -     -    0s
-     0     0    0.05698    0   50   -0.00000    0.05698      -     -    0s
-     0     2    0.05698    0   50   -0.00000    0.05698      -     -    0s
-H 1160   918                       0.0000000    0.05698      -  31.8    1s
-H 1601  1127                       0.0000000    0.04253      -  30.7    1s
-H 1663  1127                       0.0000001    0.04253      -  30.1    1s
-* 1670  1083              77       0.0000002    0.04253      -  30.0    1s
-* 1671  1043              78       0.0000003    0.04253      -  30.0    1s
-* 1672  1005              78       0.0000003    0.04253      -  30.0    1s
-* 1673   967              77       0.0000003    0.04253      -  30.0    1s
-* 1817   930              95       0.0000005    0.04253      -  29.2    1s
-* 1820   897              95       0.0000005    0.04253      -  29.2    1s
-* 4084  2159              67       0.0000006    0.03462      -  26.0    2s
+     0     0    0.08333    0   47   -0.00000    0.08333      -     -    0s
+     0     0    0.07143    0   54   -0.00000    0.07143      -     -    0s
+     0     0    0.07143    0   50   -0.00000    0.07143      -     -    0s
+     0     0    0.06897    0   50   -0.00000    0.06897      -     -    0s
+     0     2    0.06897    0   50   -0.00000    0.06897      -     -    0s
+* 4007  2486              80       0.0000002    0.04701      -  21.1    1s
+* 4025  2429              91       0.0000002    0.04701      -  21.0    1s
+* 4390  2666             104       0.0000002    0.04531      -  20.6    1s
+* 4403  2664             108       0.0000003    0.04531      -  20.6    1s
+* 4409  2660             109       0.0000004    0.04531      -  20.6    1s
+* 4422  2655             113       0.0000004    0.04531      -  20.6    1s
+* 4913  3047              94       0.0000005    0.04404      -  20.1    1s
+* 4915  3047              93       0.0000005    0.04404      -  20.1    1s
+* 4916  3047              91       0.0000005    0.04404      -  20.1    1s
+H 5510  3418                       0.0000006    0.04260      -  19.5    1s
+H 5704  3549                       0.0000007    0.04183      -  19.4    1s
+H 6844  4431                       0.0000010    0.04183      -  19.4    1s
+ 26132 18500    0.00000   65   44    0.00000    0.03011      -  18.3    5s
 
 Cutting planes:
-  Gomory: 6
+  Gomory: 3
   MIR: 2
   Flow cover: 2
-  RLT: 37
-  BQP: 4
+  RLT: 42
+  BQP: 10
 
-Explored 8592 nodes (206140 simplex iterations) in 3.28 seconds (3.55 work units)
+Explored 43368 nodes (782063 simplex iterations) in 7.59 seconds (10.51 work units)
 Thread count was 4 (of 4 available processors)
 
-Solution count 10: 5.65047e-07 5.34163e-07 5.32011e-07 ... 2.07684e-09
+Solution count 10: 9.87216e-07 6.88075e-07 6.13429e-07 ... 2.37515e-07
 
 Optimization achieved user objective limit
-Best objective 5.650473273677e-07, best bound 2.709420893059e-02, gap -
-{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 3.281214952468872, "objval": 5.650473273677249e-07, "objbound": 0.02709420893059012, "binaries": 30}
+Best objective 9.872164861364e-07, best bound 2.736038541485e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 7.595643043518066, "objval": 9.87216486136436e-07, "objbound": 0.027360385414849, "binaries": 30}
