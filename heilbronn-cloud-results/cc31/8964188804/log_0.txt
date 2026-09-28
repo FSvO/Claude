@@ -89,3 +89,22 @@ H14573 10072                       0.0000013    0.03594      -  27.1    5s
  220648 140871    0.00006   52   41    0.00000    0.02897      -  30.6   45s
  244925 156371    0.01561   35   45    0.00000    0.02868      -  30.7   50s
  272268 173391    0.00365   43   46    0.00000    0.02828      -  30.7   55s
+ 295163 187814    0.00000   86   32    0.00000    0.02800      -  30.7   60s
+ 317539 200890    0.00010   74   45    0.00000    0.02767      -  30.6   65s
+
+Cutting planes:
+  Gomory: 8
+  MIR: 1
+  Flow cover: 25
+  RLT: 80
+  Relax-and-lift: 6
+  BQP: 18
+
+Explored 340219 nodes (10398953 simplex iterations) in 69.28 seconds (85.13 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 1.3197e-06 1.31499e-06 1.17003e-06 ... 4.52197e-07
+
+Optimization achieved user objective limit
+Best objective 1.319695381958e-06, best bound 2.742036860996e-02, gap 2077680.1442%
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 69.28353500366211, "objval": 1.3196953819577346e-06, "objbound": 0.02742036860995781, "binaries": 38}
