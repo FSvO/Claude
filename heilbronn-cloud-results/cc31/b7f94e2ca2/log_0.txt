@@ -64,3 +64,27 @@ Root relaxation: objective 8.333333e-02, 117 iterations, 0.00 seconds (0.00 work
 *  799   705              75       0.0000001    0.06799      -  14.9    0s
 *  804   705              78       0.0000001    0.06799      -  14.8    0s
 *  892   805             108       0.0000003    0.06799      -  14.3    0s
+H 2022  1448                       0.0000007    0.04824      -  15.8    1s
+H 2149  1514                       0.0000008    0.04824      -  16.4    1s
+H 4816  2897                       0.0000009    0.04031      -  20.5    2s
+* 7905  5319             110       0.0000009    0.03872      -  21.7    3s
+ 19567 13118    0.00149   36   50    0.00000    0.03379      -  24.2    5s
+ 47932 30570    0.00131   41   51    0.00000    0.03007      -  24.3   10s
+ 78507 50239    0.00448   39   44    0.00000    0.02879      -  25.2   15s
+ 109972 68587    0.00010   41   39    0.00000    0.02772      -  25.2   20s
+
+Cutting planes:
+  Implied bound: 7
+  Flow cover: 19
+  RLT: 61
+  Relax-and-lift: 6
+  BQP: 17
+
+Explored 121205 nodes (3039747 simplex iterations) in 21.67 seconds (26.98 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 9: 8.95344e-07 8.77376e-07 7.66506e-07 ... -0
+
+Optimization achieved user objective limit
+Best objective 8.953436996732e-07, best bound 2.742557814831e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 21.6706120967865, "objval": 8.953436996732355e-07, "objbound": 0.02742557814830973, "binaries": 34}
