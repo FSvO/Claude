@@ -159,3 +159,8 @@ driver exit 1
 03:39:40 UTC split region (bound/target 1.124) on [[0,5,8],[0,6,7],[0,6,8],[0,7,8]]: 14 pieces proved, 2 open; total runs 1935, proved 1765, open regions 57
 03:40:03 UTC split region (bound/target 1.023) on [[1,4,5],[1,4,6],[1,4,7],[1,4,8]]: 16 pieces proved, 0 open; total runs 1951, proved 1781, open regions 56
 03:41:19 UTC split region (bound/target 1.068) on [[1,4,5],[1,4,6],[1,4,7],[1,4,8]]: 16 pieces proved, 0 open; total runs 1967, proved 1797, open regions 55
+03:48:44 UTC split region (bound/target 1.277) on [[4,6,8],[4,7,8],[5,6,7],[5,6,8]]: 11 pieces proved, 5 open; total runs 1983, proved 1808, open regions 59
+03:49:50 UTC region PROVED by a 300 s run (66 s); open 58
+03:52:22 UTC split region (bound/target 1.045) on [[5,7,8],[6,7,8],[0,4,5],[0,4,6]]: 15 pieces proved, 1 open; total runs 2000, proved 1824, open regions 58
+03:52:52 UTC split region (bound/target 1.081) on [[5,7,8],[6,7,8],[0,4,5],[0,4,6]]: 16 pieces proved, 0 open; total runs 2016, proved 1840, open regions 57
+03:53:22 UTC split region (bound/target 1.087) on [[0,4,7],[0,4,8],[0,5,6],[0,5,7]]: 16 pieces proved, 0 open; total runs 2032, proved 1856, open regions 56
