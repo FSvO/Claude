@@ -80,3 +80,21 @@ H20105 12360                       0.0000006    0.03433      -  23.0    4s
 H54040 31245                       0.0000010    0.02977      -  24.2   11s
 H60752 34997                       0.0000010    0.02932      -  24.5   12s
  72592 44480    0.00000   52   21    0.00000    0.02870      -  25.3   15s
+ 99900 57389    0.00158   33   38    0.00000    0.02746      -  25.7   20s
+
+Cutting planes:
+  Gomory: 6
+  MIR: 1
+  Flow cover: 3
+  RLT: 48
+  Relax-and-lift: 1
+  BQP: 9
+
+Explored 100641 nodes (2588009 simplex iterations) in 20.13 seconds (22.46 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 9.55485e-07 9.52699e-07 5.74744e-07 ... 2.97084e-07
+
+Optimization achieved user objective limit
+Best objective 9.554853891217e-07, best bound 2.742258766888e-02, gap -
+{"verdict": "PROVED", "status": "BOUND_REACHED", "runtime": 20.135092973709106, "objval": 9.554853891216577e-07, "objbound": 0.027422587668883364, "binaries": 26}
