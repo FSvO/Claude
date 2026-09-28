@@ -80,3 +80,27 @@ H17065  9865                       0.0000016    0.04286      -  28.9    4s
  124614 67240     cutoff   41         0.00000    0.03507      -  28.1   25s
  152746 82940    0.02202   35   52    0.00000    0.03445      -  28.2   30s
  172951 93676    0.00001   57   45    0.00000    0.03408      -  28.3   35s
+ 195260 105588    0.03085   35   58    0.00000    0.03369      -  28.2   40s
+ 223094 120496    0.00001   52   41    0.00000    0.03324      -  28.2   45s
+ 250541 135648 infeasible   40         0.00000    0.03289      -  28.2   50s
+ 277422 150691    0.00318   49   50    0.00000    0.03267      -  28.2   55s
+ 302015 164352     cutoff   46         0.00000    0.03240      -  28.1   60s
+
+Cutting planes:
+  Gomory: 4
+  Implied bound: 13
+  MIR: 5
+  Mixing: 1
+  Flow cover: 20
+  RLT: 103
+  Relax-and-lift: 14
+  BQP: 16
+
+Explored 302091 nodes (8485980 simplex iterations) in 60.00 seconds (73.54 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 1.60545e-06 1.39274e-06 1.17619e-06 ... 8.75916e-08
+
+Time limit reached
+Best objective 1.605447088022e-06, best bound 3.239864616102e-02, gap 2017945.0918%
+{"verdict": "UNRESOLVED", "status": "TIME_LIMIT", "runtime": 60.00272798538208, "objval": 1.6054470880220902e-06, "objbound": 0.032398646161016, "binaries": 42}
