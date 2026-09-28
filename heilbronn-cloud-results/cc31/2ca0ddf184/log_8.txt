@@ -88,3 +88,27 @@ H66594 40118                       0.0000008    0.04615      -  31.8   16s
  110151 65366    0.00190   37   46    0.00000    0.04401      -  31.6   25s
  133478 78464    0.01972   34   55    0.00000    0.04316      -  31.7   30s
  155868 93367    0.00011   56   50    0.00000    0.04249      -  31.8   35s
+ 180417 104652    0.00042   43   37    0.00000    0.04177      -  31.6   40s
+ 205204 119433    0.01980   40   53    0.00000    0.04134      -  31.5   45s
+ 228391 131442    0.01269   37   54    0.00000    0.04078      -  31.5   50s
+ 253362 145271    0.00752   39   50    0.00000    0.04035      -  31.5   55s
+ 271836 155492     cutoff   44         0.00000    0.04002      -  31.5   60s
+
+Cutting planes:
+  Gomory: 18
+  Implied bound: 18
+  MIR: 4
+  Flow cover: 58
+  Inf proof: 1
+  RLT: 92
+  Relax-and-lift: 7
+  BQP: 24
+
+Explored 271871 nodes (8578169 simplex iterations) in 60.00 seconds (77.44 work units)
+Thread count was 4 (of 4 available processors)
+
+Solution count 10: 8.13046e-07 6.23287e-07 6.13117e-07 ... 1.95547e-07
+
+Time limit reached
+Best objective 8.130464664580e-07, best bound 4.001571621211e-02, gap -
+{"verdict": "UNRESOLVED", "status": "TIME_LIMIT", "runtime": 60.001993894577026, "objval": 8.130464664579878e-07, "objbound": 0.04001571621210751, "binaries": 46}
