@@ -1,0 +1,43 @@
+<section id="heilbronn9" style="background:#F6F4EE; color:#1E2A3B; font-family:'IBM Plex Sans', Arial, sans-serif; padding:96px 120px 150px; display:flex; flex-direction:column; gap:28px">
+<div style="display:flex; flex-direction:column; gap:8px">
+<p style="font-size:24px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:#8F4410">Status 28 Sep 2026, 00:53 UTC · work in progress</p>
+<h1 style="font-family:'Source Serif 4', Georgia, serif; font-size:60px; font-weight:600; line-height:1.1; color:#14213D">Certifying the 9-point Heilbronn triangle record</h1>
+<p style="font-size:24px; color:#4A5568">Abbreviations: <b>T</b> = the triangle x ≥ 0, y ≥ 0, x + y ≤ 1 · <b>VM</b> = 4-core cloud virtual machine · <b>UTC</b> = Coordinated Universal Time</p>
+</div>
+<div style="flex:1; display:flex; gap:32px">
+<div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#FCFBF8; border:1px solid #DDD7CA; border-radius:16px; padding:28px">
+<h3 style="font-family:'Source Serif 4', Georgia, serif; font-size:36px; font-weight:600; color:#14213D">The problem</h3>
+<p style="font-size:26px; line-height:1.35">Place 9 points in the triangle T so that the smallest triangle any 3 of them form is as large as possible.</p>
+<div style="display:flex; justify-content:center">
+<svg aria-label="Cantrell's 9-point configuration in the triangle T, with one of its 13 smallest triangles shaded" width="260" height="260" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg"><polygon points="10,250 250,250 10,10" fill="#EAE5D8" stroke="#14213D" stroke-width="2.5"/><polygon points="52.86,155.71 112.86,207.14 104.29,147.14" fill="#F2C9A8" stroke="#8F4410" stroke-width="2"/><g fill="#C8642A" stroke="#14213D" stroke-width="1.5"><circle cx="220" cy="220" r="7"/><circle cx="10" cy="40" r="7"/><circle cx="40" cy="250" r="7"/><circle cx="10" cy="224.29" r="7"/><circle cx="224.29" cy="250" r="7"/><circle cx="35.71" cy="35.71" r="7"/><circle cx="52.86" cy="155.71" r="7"/><circle cx="112.86" cy="207.14" r="7"/><circle cx="104.29" cy="147.14" r="7"/></g></svg>
+</div>
+<p style="font-size:24px; line-height:1.35; color:#4A5568">Best known set (Cantrell, 2006): smallest area <b>43/1568</b>, shared by 13 triangles (one shaded). Proved optimal only up to 8 points.</p>
+</div>
+<div style="flex:1; display:flex; flex-direction:column; gap:18px; background:#FCFBF8; border:1px solid #DDD7CA; border-radius:16px; padding:28px">
+<h3 style="font-family:'Source Serif 4', Georgia, serif; font-size:36px; font-weight:600; color:#14213D">The method</h3>
+<p style="font-size:24px; line-height:1.3"><b>1 · Reduce.</b> An optimal set uses all 3 corners, or has 2 points on one side of T and 1 on each other side.</p>
+<p style="font-size:24px; line-height:1.3"><b>2 · Model.</b> Maximise the smallest area, with one on/off variable per triangle orientation; the Gurobi solver proves upper bounds.</p>
+<p style="font-size:24px; line-height:1.3"><b>3 · Split.</b> Fix 5 orientations: 32 parts plus the corners case. A part is proved when its bound is ≤ 43/1568 × (1 + 10⁻⁴).</p>
+<p style="font-size:24px; line-height:1.3"><b>4 · Refine and check.</b> Split open parts again, 16 pieces at a time. Checks: 7 and 8 points re-certified; a target below the optimum is refused.</p>
+</div>
+<div style="flex:1; display:flex; flex-direction:column; gap:18px; background:#FCFBF8; border:1px solid #DDD7CA; border-radius:16px; padding:28px">
+<h3 style="font-family:'Source Serif 4', Georgia, serif; font-size:36px; font-weight:600; color:#14213D">Where it stands</h3>
+<p style="font-size:24px; line-height:1.3"><b>8 points: certified.</b> 17 of 17 parts proved in 2.5 h of solver time; matches the published proof.</p>
+<p style="font-size:24px; line-height:1.3"><b>9 points, corners case: proved</b> in 7.8 minutes.</p>
+<p style="font-size:24px; line-height:1.3"><b>9 points, part 31</b> (holds the record set): over 1,000 pieces proved; about 50 regions still open.</p>
+<p style="font-size:24px; line-height:1.3"><b>9 points, other 31 parts:</b> running on GitHub; results expected by about 06:00 UTC.</p>
+<div style="flex:1"></div>
+<p style="font-size:26px; font-weight:600; color:#14213D; background:#F3D9A4; padding:14px 20px; border-radius:12px">Not yet certified · no set better than 43/1568 found</p>
+</div>
+</div>
+<p style="position:absolute; left:120px; bottom:48px; width:1680px; font-size:24px; line-height:1.3; color:#4A5568">Compute: GitHub Actions (up to 20 runners) and a 4-core VM. Model after Sudermann-Merx, arXiv:2607.15021. Data: FSvO/Claude, branch cloud-results.</p>
+<aside>Problem. Heilbronn's triangle problem asks how to place n points in a triangle so that the smallest triangle formed by any three of them is as large as possible. We use the triangle T = {x ≥ 0, y ≥ 0, x + y ≤ 1}, whose area is 1/2. For 9 points the best known set is David Cantrell's (2006), on a 1/56 grid, with smallest area exactly 43/1568 (43/784 for a unit-area triangle); 13 of its triangles share that minimum. Optimality is proved only up to 8 points (n = 7 and n = 8 by Sudermann-Merx, arXiv:2607.15021, July 2026, as stated in the project README; the paper could not be opened from the cloud session).
+
+Goal. Prove that no 9-point set beats 43/1568 × (1 + 1/10,000) = 0.0274262. With Cantrell's set this would show his set is optimal to within 0.01%, the same standard as the published 8-point result.
+
+Method. (1) Every optimal set either uses all three corners, or has two points on one side and one on each of the other two sides; the paper's Proposition 1 says so, and our review found an elementary proof as well. (2) A mixed-integer model maximises the smallest area z, with one binary variable per triangle orientation; Gurobi 13 computes a proven upper bound. (3) Fixing the orientation of triangles (2,3,k), k = 4..8, splits the problem into 32 parts plus the corners case; a part is proved when its bound drops to the target. (4) Unresolved parts are split on four more triangles (16 pieces) and re-run, repeatedly. Checks: 7 points and 8 points re-certified; a negative control with the target just below the 7-point optimum is correctly refused; results are combined with summarize.py plus an independent checker.
+
+Status at 00:53 UTC, 28 Sep 2026. 8 points certified on GitHub (17 of 17 parts, 2.54 h solver time, 86 min wall clock). 9 points: corners case proved on the VM (466 s). Part 31 contains Cantrell's set; unsplit it was still at 1.92 times the target after 1 hour, but split into pieces most close within 60 s; 1,043 pieces proved, 49 regions open plus 11 pieces in progress (bounds 1.22 to 3.43 times the target). VM total: 1,217 solver runs, 1,044 proved, 7.36 h solver time. The GitHub run for the other parts started about 18:30 UTC on 27 Sep; its results are expected by about 06:00 UTC. Nothing beats 43/1568 so far. Not certified yet.
+
+Caveats. The result rests on floating-point global optimisation (tolerances about 1e-6 against a margin of 2.7e-6; observed round-off at most 7.9e-7) and on the structural reduction in step 1.</aside>
+</section>
